@@ -10,7 +10,7 @@
     "db:migrate": "node --env-file=.env src/db/migrate.js",
     "db:seed": "node --env-file=.env src/db/seed.js",
     "forecast": "node --env-file=.env src/jobs/runForecastOnce.js",
-    "test": "node --test test/"
+    "test": "node --test"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
