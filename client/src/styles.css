@@ -396,3 +396,17 @@ input:focus, select:focus, textarea:focus {
 }
 
 .status-dot--online { background: var(--color-success); }
+
+/* ---------- Inventory ---------- */
+.badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.qty {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
