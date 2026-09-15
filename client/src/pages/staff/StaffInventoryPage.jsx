@@ -8,6 +8,7 @@ import {
 } from '../../api/medications';
 import InventoryTable from '../../components/inventory/InventoryTable';
 import MedicationForm from '../../components/inventory/MedicationForm';
+import ReorderAlertPanel from '../../components/alerts/ReorderAlertPanel';
 
 /**
  * Staff inventory dashboard (FR 2.1, FR 3, FR 4).
@@ -104,6 +105,8 @@ export default function StaffInventoryPage() {
 
       {notice && <div className="alert alert--success" role="status">{notice}</div>}
       {error && <div className="alert alert--error" role="alert">{error}</div>}
+
+      <ReorderAlertPanel />
 
       <div className="card">
         <h2>Current stock</h2>

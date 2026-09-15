@@ -27,6 +27,15 @@ async function findActiveByMedicationId(medicationId) {
   return rows[0] || null;
 }
 
+/** Most recently dismissed alert for a medication (used to avoid re-raising an identical alert). */
+async function findLatestDismissedByMedicationId(medicationId) {
+  const [rows] = await pool.execute(
+    `${SELECT} WHERE a.medication_id = ? AND a.status = 'dismissed' ORDER BY a.id DESC LIMIT 1`,
+    [medicationId]
+  );
+  return rows[0] || null;
+}
+
 async function create({ medicationId, predictedDate, daysUntilThreshold }) {
   const [result] = await pool.execute(
     'INSERT INTO reorder_alerts (medication_id, predicted_date, days_until_threshold) VALUES (?, ?, ?)',
@@ -62,6 +71,7 @@ module.exports = {
   findById,
   findActive,
   findActiveByMedicationId,
+  findLatestDismissedByMedicationId,
   create,
   updatePrediction,
   dismiss,
