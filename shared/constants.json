@@ -1,0 +1,9 @@
+{
+  "ROLES": { "STAFF": "staff", "PATIENT": "patient" },
+  "ALERT_STATUS": { "ACTIVE": "active", "DISMISSED": "dismissed" },
+  "LOW_STOCK_THRESHOLD": 10,
+  "NEAR_EXPIRY_DAYS": 30,
+  "FORECAST_HORIZON_DAYS": 7,
+  "MAX_LOGIN_ATTEMPTS": 5,
+  "LOCKOUT_MINUTES": 15
+}
