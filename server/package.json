@@ -9,6 +9,7 @@
     "start": "node --env-file=.env src/index.js",
     "db:migrate": "node --env-file=.env src/db/migrate.js",
     "db:seed": "node --env-file=.env src/db/seed.js",
+    "db:reset": "node --env-file=.env src/db/reset.js && npm run db:migrate && npm run db:seed",
     "forecast": "node --env-file=.env src/jobs/runForecastOnce.js",
     "test": "node --test"
   },

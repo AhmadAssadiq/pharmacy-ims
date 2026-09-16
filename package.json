@@ -11,6 +11,8 @@
     "dev": "concurrently -n server,client -c blue,green \"npm run dev -w server\" \"npm run dev -w client\"",
     "db:migrate": "npm run db:migrate -w server",
     "db:seed": "npm run db:seed -w server",
+    "db:reset": "npm run db:reset -w server",
+    "forecast": "npm run forecast -w server",
     "test": "npm test -w server"
   },
   "devDependencies": {

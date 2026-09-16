@@ -1,11 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  createMedication,
-  deleteMedication,
-  fetchMedications,
-  updateMedication,
-  updateMedicationQuantity,
-} from '../../api/medications';
+import { Link } from 'react-router-dom';
+import { deleteMedication, fetchMedications, updateMedication } from '../../api/medications';
 import InventoryTable from '../../components/inventory/InventoryTable';
 import MedicationForm from '../../components/inventory/MedicationForm';
 import ReorderAlertPanel from '../../components/alerts/ReorderAlertPanel';
@@ -45,17 +40,6 @@ export default function StaffInventoryPage() {
     setTimeout(() => setNotice(null), 3000);
   };
 
-  const handleCreate = async (payload) => {
-    setSaving(true);
-    try {
-      await createMedication(payload);
-      await load();
-      flash('Medication added.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const handleUpdate = async (payload) => {
     setSaving(true);
     try {
@@ -66,12 +50,6 @@ export default function StaffInventoryPage() {
     } finally {
       setSaving(false);
     }
-  };
-
-  const handleUpdateQuantity = async (id, quantity) => {
-    await updateMedicationQuantity(id, quantity);
-    await load();
-    flash('Stock quantity updated.');
   };
 
   const handleDelete = async (med) => {
@@ -93,6 +71,7 @@ export default function StaffInventoryPage() {
 
   const lowStock = medications.filter((m) => m.is_low_stock).length;
   const nearExpiry = medications.filter((m) => m.is_near_expiry).length;
+  const withExpired = medications.filter((m) => m.expired_quantity > 0).length;
 
   return (
     <>
@@ -100,6 +79,7 @@ export default function StaffInventoryPage() {
         <h1>Inventory dashboard</h1>
         <div className="status-line">
           {medications.length} medications · {lowStock} low stock · {nearExpiry} expiring within 30 days
+          {withExpired > 0 && ` · ${withExpired} holding expired stock`}
         </div>
       </div>
 
@@ -109,7 +89,12 @@ export default function StaffInventoryPage() {
       <ReorderAlertPanel />
 
       <div className="card">
-        <h2>Current stock</h2>
+        <div className="page-header" style={{ marginBottom: '0.5rem' }}>
+          <h2>Current stock</h2>
+          <span className="status-line">
+            To receive a delivery or add a new medication, use <Link to="/staff/stock">Add stock</Link>
+          </span>
+        </div>
         {loading ? (
           <p className="muted">Loading inventory...</p>
         ) : (
@@ -117,19 +102,21 @@ export default function StaffInventoryPage() {
             medications={medications}
             onEdit={startEdit}
             onDelete={handleDelete}
-            onUpdateQuantity={handleUpdateQuantity}
+            onBatchesChanged={load}
           />
         )}
       </div>
 
       <div ref={formRef}>
-        <MedicationForm
-          key={editing ? editing.id : 'new'}
-          initialValue={editing}
-          onSubmit={editing ? handleUpdate : handleCreate}
-          onCancel={() => setEditing(null)}
-          submitting={saving}
-        />
+        {editing && (
+          <MedicationForm
+            key={editing.id}
+            initialValue={editing}
+            onSubmit={handleUpdate}
+            onCancel={() => setEditing(null)}
+            submitting={saving}
+          />
+        )}
       </div>
     </>
   );

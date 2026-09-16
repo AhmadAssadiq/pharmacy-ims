@@ -63,7 +63,8 @@ export default function ReorderAlertPanel() {
               </span>
               <br />
               <span className="muted" style={{ fontSize: '0.85rem' }}>
-                Predicted date {String(alert.predicted_date).slice(0, 10)} · current stock {alert.current_quantity}
+                Predicted date {String(alert.predicted_date).slice(0, 10)} · current stock{' '}
+                {alert.current_quantity} · reorder at {alert.low_stock_threshold}
               </span>
             </span>
             <button type="button" className="btn btn--sm" onClick={() => handleDismiss(alert)}>

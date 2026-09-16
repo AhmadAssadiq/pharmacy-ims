@@ -5,6 +5,9 @@ import Layout from './components/Layout';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import StaffInventoryPage from './pages/staff/StaffInventoryPage';
+import StaffStockPage from './pages/staff/StaffStockPage';
+import StaffSellPage from './pages/staff/StaffSellPage';
+import StaffForecastPage from './pages/staff/StaffForecastPage';
 import StaffChatInboxPage from './pages/staff/StaffChatInboxPage';
 import PatientAvailabilityPage from './pages/patient/PatientAvailabilityPage';
 import PatientChatPage from './pages/patient/PatientChatPage';
@@ -29,6 +32,9 @@ export default function App() {
           <Route element={<ProtectedRoute role={ROLES.STAFF} />}>
             <Route element={<Layout />}>
               <Route path="/staff/inventory" element={<StaffInventoryPage />} />
+              <Route path="/staff/stock" element={<StaffStockPage />} />
+              <Route path="/staff/sell" element={<StaffSellPage />} />
+              <Route path="/staff/forecast" element={<StaffForecastPage />} />
               <Route path="/staff/chat" element={<StaffChatInboxPage />} />
             </Route>
           </Route>

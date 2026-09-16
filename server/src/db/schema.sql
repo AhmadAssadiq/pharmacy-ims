@@ -1,5 +1,6 @@
 -- Pharmacy Inventory Management System - database schema
--- Exactly the six tables defined in the project specification.
+-- The six tables from the project specification plus `medication_batches`:
+-- stock is held per dated lot so each delivery carries its own expiry date.
 
 CREATE DATABASE IF NOT EXISTS pharmacy_ims
   CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
@@ -16,18 +17,33 @@ CREATE TABLE IF NOT EXISTS users (
   UNIQUE KEY uq_users_email (email)
 ) ENGINE=InnoDB;
 
--- Medication catalog / inventory.
+-- Medication catalog. Stock levels and expiry dates live in medication_batches;
+-- this table holds only catalog data plus the per-medication reorder threshold.
 CREATE TABLE IF NOT EXISTS medications (
-  id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  name          VARCHAR(150) NOT NULL,
-  category      VARCHAR(100) NOT NULL,
-  quantity      INT NOT NULL,
-  unit_price    DECIMAL(10, 2) NOT NULL,
-  expiry_date   DATE NOT NULL,
-  supplier_info VARCHAR(255) NOT NULL,
+  id                  INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  name                VARCHAR(150) NOT NULL,
+  category            VARCHAR(100) NOT NULL,
+  unit_price          DECIMAL(10, 2) NOT NULL,
+  supplier_info       VARCHAR(255) NOT NULL,
+  low_stock_threshold INT NOT NULL DEFAULT 10,
   PRIMARY KEY (id),
-  CONSTRAINT chk_medications_quantity CHECK (quantity >= 0),
-  CONSTRAINT chk_medications_price CHECK (unit_price >= 0)
+  CONSTRAINT chk_medications_price CHECK (unit_price >= 0),
+  CONSTRAINT chk_medications_threshold CHECK (low_stock_threshold >= 0)
+) ENGINE=InnoDB;
+
+-- One row per received lot. A medication's sellable quantity is the sum of its
+-- unexpired batches; dispensing draws from the nearest expiry first (FEFO).
+CREATE TABLE IF NOT EXISTS medication_batches (
+  id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  medication_id INT UNSIGNED NOT NULL,
+  quantity      INT NOT NULL,
+  expiry_date   DATE NOT NULL,
+  batch_number  VARCHAR(60) NULL,
+  received_date DATE NOT NULL,
+  PRIMARY KEY (id),
+  KEY idx_medication_batches_medication_expiry (medication_id, expiry_date),
+  CONSTRAINT fk_medication_batches_medication FOREIGN KEY (medication_id) REFERENCES medications (id) ON DELETE CASCADE,
+  CONSTRAINT chk_medication_batches_quantity CHECK (quantity >= 0)
 ) ENGINE=InnoDB;
 
 -- One chat session per patient; staff_id is set when a staff member replies.

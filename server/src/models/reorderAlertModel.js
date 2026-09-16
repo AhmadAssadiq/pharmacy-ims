@@ -3,7 +3,14 @@
  */
 const pool = require('../config/db');
 
-const SELECT = `SELECT a.id, a.medication_id, m.name AS medication_name, m.quantity AS current_quantity,
+// Stock lives in medication_batches, so the current level is the sum of the
+// medication's unexpired lots - expired units cannot be dispensed and must not
+// count towards the alert.
+const SELECT = `SELECT a.id, a.medication_id, m.name AS medication_name,
+                       CAST(COALESCE((SELECT SUM(b.quantity) FROM medication_batches b
+                                      WHERE b.medication_id = m.id AND b.expiry_date >= CURDATE()), 0) AS SIGNED)
+                         AS current_quantity,
+                       m.low_stock_threshold,
                        a.predicted_date, a.days_until_threshold, a.status
                 FROM reorder_alerts a JOIN medications m ON m.id = a.medication_id`;
 

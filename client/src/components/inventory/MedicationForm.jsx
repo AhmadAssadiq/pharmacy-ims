@@ -1,10 +1,22 @@
 import { useEffect, useState } from 'react';
+import constants from '../../../../shared/constants.json';
 
-const EMPTY = { name: '', category: '', quantity: '', unit_price: '', expiry_date: '', supplier_info: '' };
+const EMPTY = {
+  name: '',
+  category: '',
+  unit_price: '',
+  supplier_info: '',
+  low_stock_threshold: '',
+  quantity: '',
+  expiry_date: '',
+  batch_number: '',
+};
 
 /**
- * Add / edit form for a medication (FR 3.1, FR 3.2). All six fields from the
- * specification are shown with plain labels so no training is needed (NFR 3.1).
+ * Add / edit form for a medication (FR 3.1, FR 3.2).
+ * Adding one also records its opening stock lot, since quantity and expiry now
+ * belong to a batch. Editing covers catalog fields only - stock is changed from
+ * the medication's stock lots.
  */
 export default function MedicationForm({ initialValue, onSubmit, onCancel, submitting }) {
   const [form, setForm] = useState(EMPTY);
@@ -13,7 +25,12 @@ export default function MedicationForm({ initialValue, onSubmit, onCancel, submi
   const isEdit = Boolean(initialValue);
 
   useEffect(() => {
-    setForm(initialValue ? { ...EMPTY, ...initialValue, expiry_date: String(initialValue.expiry_date).slice(0, 10) } : EMPTY);
+    const threshold = String(initialValue?.low_stock_threshold ?? constants.LOW_STOCK_THRESHOLD);
+    setForm(
+      initialValue
+        ? { ...EMPTY, ...initialValue, low_stock_threshold: threshold }
+        : { ...EMPTY, low_stock_threshold: threshold }
+    );
     setError(null);
     setFieldErrors({});
   }, [initialValue]);
@@ -24,16 +41,23 @@ export default function MedicationForm({ initialValue, onSubmit, onCancel, submi
     e.preventDefault();
     setError(null);
     setFieldErrors({});
+
+    const payload = {
+      name: form.name,
+      category: form.category,
+      unit_price: form.unit_price,
+      supplier_info: form.supplier_info,
+      low_stock_threshold: form.low_stock_threshold,
+    };
+    if (!isEdit) {
+      payload.quantity = form.quantity;
+      payload.expiry_date = form.expiry_date;
+      payload.batch_number = form.batch_number;
+    }
+
     try {
-      await onSubmit({
-        name: form.name,
-        category: form.category,
-        quantity: form.quantity,
-        unit_price: form.unit_price,
-        expiry_date: form.expiry_date,
-        supplier_info: form.supplier_info,
-      });
-      if (!isEdit) setForm(EMPTY);
+      await onSubmit(payload);
+      if (!isEdit) setForm({ ...EMPTY, low_stock_threshold: String(constants.LOW_STOCK_THRESHOLD) });
     } catch (err) {
       setError(err.message);
       setFieldErrors(err.details || {});
@@ -43,7 +67,7 @@ export default function MedicationForm({ initialValue, onSubmit, onCancel, submi
   const field = (name, label, props = {}) => (
     <label className="field">
       <span className="field__label">{label}</span>
-      <input name={name} value={form[name]} onChange={handleChange} required {...props} />
+      <input name={name} value={form[name]} onChange={handleChange} {...props} />
       {fieldErrors[name] && <span className="field__error">{fieldErrors[name]}</span>}
     </label>
   );
@@ -54,13 +78,28 @@ export default function MedicationForm({ initialValue, onSubmit, onCancel, submi
       {error && <div className="alert alert--error" role="alert">{error}</div>}
 
       <div className="form-grid">
-        {field('name', 'Medication name', { maxLength: 150 })}
-        {field('category', 'Category', { maxLength: 100 })}
-        {field('quantity', 'Quantity in stock', { type: 'number', min: 0, step: 1 })}
-        {field('unit_price', 'Unit price', { type: 'number', min: 0, step: '0.01' })}
-        {field('expiry_date', 'Expiry date', { type: 'date' })}
-        {field('supplier_info', 'Supplier information', { maxLength: 255 })}
+        {field('name', 'Medication name', { required: true, maxLength: 150 })}
+        {field('category', 'Category', { required: true, maxLength: 100 })}
+        {field('unit_price', 'Unit price', { required: true, type: 'number', min: 0, step: '0.01' })}
+        {field('supplier_info', 'Supplier information', { required: true, maxLength: 255 })}
+        {field('low_stock_threshold', 'Reorder threshold (units)', {
+          required: true, type: 'number', min: 0, step: 1,
+        })}
       </div>
+
+      {!isEdit && (
+        <>
+          <h3>Opening stock lot</h3>
+          <p className="muted">
+            Stock is tracked per lot so each delivery keeps its own expiry date. More lots can be added afterwards.
+          </p>
+          <div className="form-grid">
+            {field('quantity', 'Quantity in stock', { required: true, type: 'number', min: 0, step: 1 })}
+            {field('expiry_date', 'Expiry date of this lot', { required: true, type: 'date' })}
+            {field('batch_number', 'Lot number (optional)', { maxLength: 60 })}
+          </div>
+        </>
+      )}
 
       <div className="form-actions">
         <button type="submit" className="btn btn--primary" disabled={submitting}>

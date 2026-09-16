@@ -4,6 +4,9 @@ import { ROLES } from '../utils/routes';
 
 const STAFF_LINKS = [
   { to: '/staff/inventory', label: 'Inventory' },
+  { to: '/staff/stock', label: 'Add stock' },
+  { to: '/staff/sell', label: 'Dispense' },
+  { to: '/staff/forecast', label: 'Forecast' },
   { to: '/staff/chat', label: 'Chat inbox' },
 ];
 

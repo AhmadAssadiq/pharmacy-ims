@@ -37,9 +37,15 @@ server/src
 ## Prerequisites
 
 - Node.js 22 or newer
-- Python 3.11 or newer
+- **Python 3.12** - not 3.13 or 3.14. The pinned `numpy` and `scikit-learn` versions in
+  `ml-service/requirements.txt` have no prebuilt wheels for those releases, so `pip` falls back to
+  compiling from source and the install fails. On Windows: `winget install Python.Python.3.12`
 - MySQL 8.x running locally (the default config expects `root` with an empty password on
   `127.0.0.1:3306`; change `server/.env` if yours differs)
+
+Nothing machine-specific is committed: `node_modules/`, `ml-service/venv/`, the trained
+`*.joblib` models and `server/.env` are all git-ignored, and the database lives in MySQL rather
+than in the repository. The steps below recreate all of them from scratch on a new machine.
 
 ## Setup
 
@@ -51,12 +57,22 @@ npm install
 
 This installs the `client` and `server` workspaces from the repository root.
 
+Create the Python environment with 3.12 explicitly, so it does not pick up a newer default
+interpreter:
+
 ```bash
 cd ml-service
-python -m venv venv
-venv\Scripts\pip install -r requirements.txt      # Windows
-# source venv/bin/activate && pip install -r requirements.txt   # macOS / Linux
+py -3.12 -m venv venv                             # Windows
+venv\Scripts\pip install -r requirements.txt
 ```
+
+```bash
+# macOS / Linux
+python3.12 -m venv venv
+source venv/bin/activate && pip install -r requirements.txt
+```
+
+`venv\Scripts\python --version` should report 3.12.x before you continue.
 
 ### 2. Configure the server
 
@@ -67,6 +83,10 @@ cp server/.env.example server/.env
 Edit `server/.env` and set at least `DB_PASSWORD` (if your MySQL root has one) and a random
 `JWT_SECRET`.
 
+`server/.env` is git-ignored, so it never arrives with a clone - you must create it on every new
+machine. The server scripts run with `node --env-file=.env` and will refuse to start if the file
+is missing.
+
 ### 3. Create the database and demo data
 
 ```bash
@@ -74,9 +94,17 @@ npm run db:migrate
 npm run db:seed
 ```
 
-`db:migrate` creates the `pharmacy_ims` database with the six tables (`users`, `medications`,
-`chat_sessions`, `chat_messages`, `sales_history`, `reorder_alerts`). `db:seed` creates the
-demo accounts, a starter catalog and 90 days of synthetic sales history.
+`db:migrate` creates the `pharmacy_ims` database with seven tables (`users`, `medications`,
+`medication_batches`, `chat_sessions`, `chat_messages`, `sales_history`, `reorder_alerts`).
+`db:seed` creates the demo accounts, a starter catalog held as dated stock lots and 90 days of
+synthetic sales history.
+
+`db:migrate` only issues `CREATE TABLE IF NOT EXISTS`, so it cannot apply schema changes to
+tables that already exist. After a schema change, rebuild the database instead:
+
+```bash
+npm run db:reset      # drops the database, then migrates and seeds it again
+```
 
 | Account | Email | Password | Role |
 |---|---|---|---|
@@ -88,7 +116,7 @@ administrator (see `server/src/db/seed.js`).
 
 ## Running
 
-Open three terminals.
+Open two terminals - the second command starts both the API and the client.
 
 **ML service** (port 5001):
 
@@ -107,11 +135,17 @@ npm run dev
 
 Open <http://localhost:5173>.
 
+The staff portal has five pages: **Inventory** (stock levels, flags and per-medication reorder
+thresholds), **Add stock** (receive a lot, or add a medication the catalog does not carry yet),
+**Dispense** (record a multi-item sale), **Forecast** (per-medication demand charts) and
+**Chat inbox**. The ML service only needs to be running for the forecast features.
+
 ### Useful commands
 
 | Command | What it does |
 |---|---|
-| `npm test` | Runs the server unit tests (auth validation, lockout, role middleware, medication validation, stock flags) |
+| `npm test` | Runs the server unit tests (auth validation, lockout, role middleware, medication validation, stock flags, FEFO allocation) |
+| `npm run db:reset` | Drops, migrates and re-seeds the database (needed after a schema change) |
 | `npm run forecast -w server` | Runs the ML forecast / reorder-alert check once and prints the result |
 | `npm run build -w client` | Production build of the React app into `client/dist` |
 
@@ -122,7 +156,10 @@ Open <http://localhost:5173>.
 | FR 1 - authenticate before any access | `server/src/middleware/authenticate.js`, `client/src/components/ProtectedRoute.jsx` |
 | FR 2 / 2.1 / 2.2 - role-based access | `server/src/middleware/requireRole.js`, role-specific routes and navigation in `client/src/App.jsx` |
 | FR 3 / 3.1 / 3.2 - manage medication catalog | `server/src/routes/medicationRoutes.js` -> `medicationService.js`; `client/src/pages/staff/StaffInventoryPage.jsx` |
-| FR 4 - stock levels with low-stock / near-expiry flags | `server/src/utils/stockFlags.js` (threshold 10 units, 30 days) |
+| FR 4 - stock levels with low-stock / near-expiry flags | `server/src/utils/stockFlags.js` (per-medication threshold, 30 days) |
+| UC-1 - update stock quantity | receiving or correcting a stock lot: `batchService.js`, `client/src/components/inventory/BatchPanel.jsx` |
+| Dispensing (GP2 addition) - record a sale, deplete stock FEFO, feed the forecast | `server/src/services/salesService.js`, `server/src/utils/fefo.js`, `client/src/pages/staff/StaffSellPage.jsx` |
+| Forecast charts (GP2 addition) - per-medication demand history and prediction | `forecastService.getMedicationForecast`, `client/src/pages/staff/StaffForecastPage.jsx`, `client/src/components/forecast/` |
 | FR 5 / 5.1 / 5.2 - real-time chat, persisted, unified inbox | `server/src/ws/chatHub.js`, `chatService.js`; `PatientChatPage.jsx`, `StaffChatInboxPage.jsx` |
 | FR 6 / 6.1 / 6.2 - ML forecast + 7-day reorder alerts | `ml-service/forecaster.py`, `server/src/services/forecastService.js`, `server/src/jobs/forecastJob.js`, `ReorderAlertPanel.jsx` |
 | FR 7 - availability without exact quantities | `server/src/services/availabilityService.js`, `PatientAvailabilityPage.jsx` |
@@ -135,13 +172,15 @@ Thresholds live in `shared/constants.json`:
 
 | Constant | Value | Used for |
 |---|---|---|
-| `LOW_STOCK_THRESHOLD` | 10 | low-stock flag (FR 4) and the safe threshold for reorder alerts (FR 6.2) |
+| `LOW_STOCK_THRESHOLD` | 10 | *default* low-stock threshold for a new medication; each medication stores its own `low_stock_threshold`, used for the FR 4 flag and the FR 6.2 reorder alerts |
 | `NEAR_EXPIRY_DAYS` | 30 | near-expiry flag (FR 4) |
 | `FORECAST_HORIZON_DAYS` | 7 | reorder alert window (FR 6.2) |
 | `MAX_LOGIN_ATTEMPTS` / `LOCKOUT_MINUTES` | 5 / 15 | login lockout (NFR 2.3) |
 
 ## How the forecasting works
 
+0. Every sale recorded at the dispensing counter writes a row into `sales_history`, so the model
+   trains on real demand as the pharmacy is used, not only on the seeded history.
 1. The backend job (hourly by default, `FORECAST_CRON`, and once 5 s after start-up) sends each
    medication's `sales_history` rows to the ML service `POST /train`.
 2. The service aggregates sales per day and fits a scikit-learn `LinearRegression` per
@@ -166,9 +205,13 @@ All endpoints are under `/api` and, except register/login, require `Authorizatio
 | POST | `/auth/register` | public | create a patient account |
 | POST | `/auth/login` | public | sign in (locks after 5 failures) |
 | GET | `/auth/me` | any | current user |
-| GET/POST | `/medications` | staff | list / add medication |
-| GET/PUT/DELETE | `/medications/:id` | staff | read / update / delete |
-| PATCH | `/medications/:id/quantity` | staff | update stock quantity (UC-1) |
+| GET/POST | `/medications` | staff | list / add medication (adding also creates its opening stock lot) |
+| GET/PUT/DELETE | `/medications/:id` | staff | read / update catalog fields / delete |
+| GET/POST | `/medications/:id/batches` | staff | list stock lots / receive a new lot (UC-1) |
+| PATCH/DELETE | `/medications/batches/:batchId` | staff | correct or remove a stock lot (UC-1) |
+| GET/POST | `/sales` | staff | recent sales / record a multi-item sale `{ items: [{ medication_id, quantity }] }`, depleting stock FEFO in one transaction |
+| GET | `/sales/preview` | staff | which lots one basket line would draw from, before committing |
+| GET | `/forecast/:medicationId` | staff | sales history + 7-day forecast for one medication (retrains on request; powers the forecast charts) |
 | GET | `/alerts` | staff | active reorder alerts |
 | PATCH | `/alerts/:id/dismiss` | staff | dismiss an alert |
 | POST | `/chat/sessions` | patient | open (or create) the patient's chat session |
