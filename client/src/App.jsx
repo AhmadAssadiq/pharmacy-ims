@@ -12,6 +12,7 @@ import StaffStockPage from './pages/staff/StaffStockPage';
 import StaffSellPage from './pages/staff/StaffSellPage';
 import StaffForecastPage from './pages/staff/StaffForecastPage';
 import StaffChatInboxPage from './pages/staff/StaffChatInboxPage';
+import StaffPreordersPage from './pages/staff/StaffPreordersPage';
 import PatientAvailabilityPage from './pages/patient/PatientAvailabilityPage';
 import PatientChatPage from './pages/patient/PatientChatPage';
 import { homePathForRole, ROLES } from './utils/routes';
@@ -43,6 +44,7 @@ export default function App() {
                   <Route path="/staff/sell" element={<StaffSellPage />} />
                   <Route path="/staff/forecast" element={<StaffForecastPage />} />
                   <Route path="/staff/chat" element={<StaffChatInboxPage />} />
+                  <Route path="/staff/preorders" element={<StaffPreordersPage />} />
                 </Route>
               </Route>
 

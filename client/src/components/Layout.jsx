@@ -10,6 +10,7 @@ const STAFF_LINKS = [
   { to: '/staff/inventory', label: 'nav.inventory' },
   { to: '/staff/stock', label: 'nav.addStock' },
   { to: '/staff/sell', label: 'nav.dispense' },
+  { to: '/staff/preorders', label: 'nav.preorders' },
   { to: '/staff/forecast', label: 'nav.forecast' },
   { to: '/staff/chat', label: 'nav.chatInbox' },
 ];

@@ -9,6 +9,7 @@ const alertRoutes = require('./alertRoutes');
 const availabilityRoutes = require('./availabilityRoutes');
 const salesRoutes = require('./salesRoutes');
 const forecastRoutes = require('./forecastRoutes');
+const preorderRoutes = require('./preorderRoutes');
 
 const router = Router();
 
@@ -20,5 +21,6 @@ router.use('/alerts', alertRoutes);
 router.use('/availability', availabilityRoutes);
 router.use('/sales', salesRoutes);
 router.use('/forecast', forecastRoutes);
+router.use('/preorders', preorderRoutes);
 
 module.exports = router;

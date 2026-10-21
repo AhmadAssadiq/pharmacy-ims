@@ -42,10 +42,10 @@ function Glyph({ name }) {
   );
 }
 
-/** One badge: glyph + label, in the tone for its severity. */
-export default function StatusMark({ kind, label }) {
+/** One badge: glyph + label, in the tone for its severity (or an explicit `tone`). */
+export default function StatusMark({ kind, label, tone: toneOverride }) {
   const tone =
-    kind === 'out' || kind === 'expired' ? 'danger' : kind === 'ok' ? 'success' : 'warning';
+    toneOverride ?? (kind === 'out' || kind === 'expired' ? 'danger' : kind === 'ok' ? 'success' : 'warning');
   return (
     <span className={`badge badge--${tone}`}>
       <Glyph name={kind} />
@@ -72,4 +72,21 @@ export function medicationStatuses(med, t) {
   }
   if (marks.length === 0) marks.push({ kind: 'ok', label: t('status.ok') });
   return marks;
+}
+
+/**
+ * A preorder's status as a mark (GP2 addition). Only "ready" takes the
+ * positive hue, since it is the one the patient has to act on; finished
+ * requests drop to neutral so they recede.
+ */
+const PREORDER_MARKS = {
+  pending: { kind: 'clock', tone: 'warning' },
+  ready: { kind: 'ok', tone: 'success' },
+  collected: { kind: 'ok', tone: 'muted' },
+  cancelled: { kind: 'out', tone: 'muted' },
+};
+
+export function PreorderStatus({ status, t }) {
+  const mark = PREORDER_MARKS[status] ?? PREORDER_MARKS.pending;
+  return <StatusMark kind={mark.kind} tone={mark.tone} label={t(`preorders.status.${status}`)} />;
 }

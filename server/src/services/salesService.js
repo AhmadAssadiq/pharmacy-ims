@@ -24,6 +24,11 @@ function today() {
   return new Date().toISOString().slice(0, 10);
 }
 
+/**
+ * Dispenses one line inside the caller's transaction: draws the units FEFO from
+ * the locked lots and writes the sales_history row. Shared with preorder
+ * collection, so both paths move stock the same way.
+ */
 async function dispenseLine(item, date, conn) {
   const medication = await medicationModel.findById(item.medication_id, conn);
   if (!medication) throw new HttpError(404, `Medication ${item.medication_id} not found`, undefined, {
@@ -105,4 +110,4 @@ async function listRecentSales(limit = 20) {
   return salesHistoryModel.findRecent(limit);
 }
 
-module.exports = { recordSale, previewSale, listRecentSales };
+module.exports = { recordSale, previewSale, listRecentSales, dispenseLine, today };

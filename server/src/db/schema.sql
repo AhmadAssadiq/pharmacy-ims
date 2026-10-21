@@ -73,6 +73,35 @@ CREATE TABLE IF NOT EXISTS chat_messages (
   CONSTRAINT fk_chat_messages_sender  FOREIGN KEY (sender_id)       REFERENCES users (id)         ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
+-- Patient requests for a medication that is out of stock (GP2 addition).
+-- No stock is reserved when a request is made; marking it collected dispenses
+-- it through the normal FEFO path (services/preorderService.js).
+-- `pending_key` exists only while a request is pending, so its unique key
+-- allows one pending request per patient and medication while keeping any
+-- number of finished ones (MySQL has no partial unique index; NULLs never clash).
+-- It is VIRTUAL because MySQL forbids ON DELETE CASCADE on the base columns of
+-- a STORED generated column; an indexed virtual column is allowed.
+-- Deleting a patient or a medication removes their requests with them.
+CREATE TABLE IF NOT EXISTS preorders (
+  id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  patient_id    INT UNSIGNED NOT NULL,
+  medication_id INT UNSIGNED NOT NULL,
+  quantity      INT NOT NULL,
+  status        ENUM('pending', 'ready', 'collected', 'cancelled') NOT NULL DEFAULT 'pending',
+  note          VARCHAR(500) NULL,
+  created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  pending_key   VARCHAR(24) GENERATED ALWAYS AS
+                  (IF(status = 'pending', CONCAT(patient_id, ':', medication_id), NULL)) VIRTUAL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_preorders_pending (pending_key),
+  KEY idx_preorders_status_created (status, created_at),
+  KEY idx_preorders_patient (patient_id),
+  CONSTRAINT fk_preorders_patient    FOREIGN KEY (patient_id)    REFERENCES users (id)       ON DELETE CASCADE,
+  CONSTRAINT fk_preorders_medication FOREIGN KEY (medication_id) REFERENCES medications (id) ON DELETE CASCADE,
+  CONSTRAINT chk_preorders_quantity CHECK (quantity > 0)
+) ENGINE=InnoDB;
+
 -- Historical sales used to train the forecasting model (FR 6.1).
 CREATE TABLE IF NOT EXISTS sales_history (
   id            INT UNSIGNED NOT NULL AUTO_INCREMENT,

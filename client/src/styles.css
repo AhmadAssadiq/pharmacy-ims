@@ -841,6 +841,9 @@ input[aria-invalid='true'], select[aria-invalid='true'] { border-color: var(--ne
 
 .list__item:last-child { border-bottom: 0; }
 
+/* A row's trailing status and its action, kept together on the end side. */
+.list__actions { display: inline-flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+
 .list__item--button {
   width: 100%;
   padding: 10px;

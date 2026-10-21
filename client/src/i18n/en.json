@@ -30,6 +30,7 @@
     "inventory": "Inventory",
     "addStock": "Add stock",
     "dispense": "Dispense",
+    "preorders": "Preorders",
     "forecast": "Forecast",
     "chatInbox": "Chat inbox",
     "availability": "Medication availability",
@@ -298,6 +299,54 @@
     "inStock": "In stock",
     "outOfStock": "Out of stock"
   },
+  "preorders": {
+    "status": { "pending": "Pending", "ready": "Ready to collect", "collected": "Collected", "cancelled": "Cancelled" },
+    "mineTitle": "Your requests",
+    "mineNote": "The pharmacy updates these as your medication comes in.",
+    "mineLine": "{quantity} requested on {date}",
+    "request": "Request",
+    "requestLabel": "Request {name}",
+    "alreadyRequested": "Requested",
+    "requestTitle": "Request {name}?",
+    "requestLead": "The pharmacy sees your request and you can follow it here. Nothing is reserved or paid for until you collect it.",
+    "sendRequest": "Send request",
+    "quantityHint": "Up to {count}.",
+    "quantityInvalid": "Enter a quantity from 1 to {count}.",
+    "noteLabel": "Note for the pharmacist (optional)",
+    "requestSent": "Your request for {name} has been sent.",
+    "requestCancelled": "Your request for {name} has been cancelled.",
+    "cancelRequest": "Cancel request",
+    "keepRequest": "Keep request",
+    "cancelTitle": "Cancel this request?",
+    "cancelLead": "Your request for {name} will be withdrawn.",
+    "staffTitle": "Preorders",
+    "findingReady": {
+      "one": "{count} request is ready and waiting to be collected.",
+      "other": "{count} requests are ready and waiting to be collected."
+    },
+    "findingPending": {
+      "one": "{count} request is waiting for stock.",
+      "other": "{count} requests are waiting for stock."
+    },
+    "findingNone": "No open requests.",
+    "staffEmpty": "No requests with this status.",
+    "regionLabel": "Preorder requests, scrollable",
+    "caption": "Preorder requests from patients, newest first, with their status.",
+    "colRequested": "Requested",
+    "colPatient": "Patient",
+    "colNote": "Note",
+    "markReady": "Mark ready",
+    "markCollected": "Mark collected",
+    "moved": {
+      "ready": "{name} for {patient} is marked ready to collect.",
+      "collected": "{name} handed over to {patient}. The stock has been dispensed.",
+      "cancelled": "The request for {name} from {patient} is cancelled."
+    },
+    "collectTitle": "Hand over and dispense?",
+    "collectLead": "{quantity} × {name} for {patient}. The stock is dispensed now, nearest expiry first, and this cannot be undone.",
+    "collectConfirm": "Dispense and mark collected",
+    "staffCancelLead": "{patient} will see the request as cancelled."
+  },
   "errors": {
     "VALIDATION_FAILED": "Some fields need attention.",
     "INVALID_JSON": "The request could not be read.",
@@ -326,6 +375,10 @@
     "CHAT_SESSION_NOT_FOUND": "This conversation no longer exists.",
     "CHAT_FORBIDDEN": "You do not have access to this conversation.",
     "MESSAGE_EMPTY": "Message cannot be empty.",
-    "MESSAGE_TOO_LONG": "Messages can be at most {count} characters."
+    "MESSAGE_TOO_LONG": "Messages can be at most {count} characters.",
+    "PREORDER_NOT_FOUND": "This request no longer exists.",
+    "PREORDER_DUPLICATE": "You already have an open request for {name}.",
+    "PREORDER_INVALID_TRANSITION": "This request has already moved on. Refresh the page.",
+    "PREORDER_NOT_CANCELLABLE": "This request can no longer be cancelled; the pharmacy has already acted on it."
   }
 }

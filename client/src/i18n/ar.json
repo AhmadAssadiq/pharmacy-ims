@@ -44,6 +44,7 @@
     "inventory": "المخزون",
     "addStock": "إضافة مخزون",
     "dispense": "الصرف",
+    "preorders": "الطلبات المسبقة",
     "forecast": "التنبؤ بالطلب",
     "chatInbox": "صندوق المحادثات",
     "availability": "توفّر الأدوية",
@@ -398,6 +399,60 @@
     "inStock": "متوفر",
     "outOfStock": "غير متوفر"
   },
+  "preorders": {
+    "status": { "pending": "قيد الانتظار", "ready": "جاهز للاستلام", "collected": "تم الاستلام", "cancelled": "ملغى" },
+    "mineTitle": "طلباتك",
+    "mineNote": "تحدّث الصيدلية حالة طلباتك عند توفّر الدواء.",
+    "mineLine": "الكمية {quantity}، طُلب في {date}",
+    "request": "اطلبه",
+    "requestLabel": "اطلب {name}",
+    "alreadyRequested": "تم الطلب",
+    "requestTitle": "طلب {name}؟",
+    "requestLead": "تطّلع الصيدلية على طلبك ويمكنك متابعته هنا. لا يُحجز شيء ولا تدفع شيئًا حتى تستلمه.",
+    "sendRequest": "إرسال الطلب",
+    "quantityHint": "حتى {count}.",
+    "quantityInvalid": "أدخل كمية من 1 إلى {count}.",
+    "noteLabel": "ملاحظة للصيدلي (اختياري)",
+    "requestSent": "تم إرسال طلبك للدواء {name}.",
+    "requestCancelled": "تم إلغاء طلبك للدواء {name}.",
+    "cancelRequest": "إلغاء الطلب",
+    "keepRequest": "الإبقاء على الطلب",
+    "cancelTitle": "إلغاء هذا الطلب؟",
+    "cancelLead": "سيُسحب طلبك للدواء {name}.",
+    "staffTitle": "الطلبات المسبقة",
+    "findingReady": {
+      "one": "طلب واحد جاهز وبانتظار الاستلام.",
+      "two": "طلبان جاهزان وبانتظار الاستلام.",
+      "few": "{count} طلبات جاهزة وبانتظار الاستلام.",
+      "many": "{count} طلبًا جاهزًا وبانتظار الاستلام.",
+      "other": "{count} طلب جاهز وبانتظار الاستلام."
+    },
+    "findingPending": {
+      "one": "طلب واحد بانتظار توفّر المخزون.",
+      "two": "طلبان بانتظار توفّر المخزون.",
+      "few": "{count} طلبات بانتظار توفّر المخزون.",
+      "many": "{count} طلبًا بانتظار توفّر المخزون.",
+      "other": "{count} طلب بانتظار توفّر المخزون."
+    },
+    "findingNone": "لا توجد طلبات مفتوحة.",
+    "staffEmpty": "لا توجد طلبات بهذه الحالة.",
+    "regionLabel": "الطلبات المسبقة، قابلة للتمرير",
+    "caption": "الطلبات المسبقة من المرضى، الأحدث أولًا، مع حالة كل طلب.",
+    "colRequested": "تاريخ الطلب",
+    "colPatient": "المريض",
+    "colNote": "ملاحظة",
+    "markReady": "تحديده جاهزًا",
+    "markCollected": "تحديده مُستلَمًا",
+    "moved": {
+      "ready": "تم تحديد {name} للمريض {patient} جاهزًا للاستلام.",
+      "collected": "تم تسليم {name} إلى {patient} وصرفه من المخزون.",
+      "cancelled": "تم إلغاء طلب {name} من {patient}."
+    },
+    "collectTitle": "تسليم وصرف؟",
+    "collectLead": "{quantity} × {name} للمريض {patient}. يُصرف المخزون الآن من الأقرب انتهاءً أولًا، ولا يمكن التراجع عن ذلك.",
+    "collectConfirm": "صرف وتحديده مُستلَمًا",
+    "staffCancelLead": "سيظهر الطلب للمريض {patient} ملغى."
+  },
   "errors": {
     "VALIDATION_FAILED": "بعض الحقول تحتاج إلى مراجعة.",
     "INVALID_JSON": "تعذّرت قراءة الطلب.",
@@ -437,6 +492,10 @@
     "CHAT_SESSION_NOT_FOUND": "لم تعد هذه المحادثة موجودة.",
     "CHAT_FORBIDDEN": "ليس لديك إذن بالوصول إلى هذه المحادثة.",
     "MESSAGE_EMPTY": "لا يمكن إرسال رسالة فارغة.",
-    "MESSAGE_TOO_LONG": "يجب ألا تتجاوز الرسالة {count} حرف."
+    "MESSAGE_TOO_LONG": "يجب ألا تتجاوز الرسالة {count} حرف.",
+    "PREORDER_NOT_FOUND": "لم يعد هذا الطلب موجودًا.",
+    "PREORDER_DUPLICATE": "لديك طلب مفتوح للدواء {name} بالفعل.",
+    "PREORDER_INVALID_TRANSITION": "تغيّرت حالة هذا الطلب بالفعل. حدّث الصفحة.",
+    "PREORDER_NOT_CANCELLABLE": "لم يعد بالإمكان إلغاء هذا الطلب، فقد تعاملت معه الصيدلية بالفعل."
   }
 }
