@@ -13,16 +13,24 @@ async function findById(id) {
 
 async function findByPatientId(patientId) {
   const [rows] = await pool.execute(
-    `SELECT id, patient_id, staff_id, created_at FROM chat_sessions
-     WHERE patient_id = ? ORDER BY created_at DESC LIMIT 1`,
+    'SELECT id, patient_id, staff_id, created_at FROM chat_sessions WHERE patient_id = ?',
     [patientId]
   );
   return rows[0] || null;
 }
 
-async function create(patientId) {
-  const [result] = await pool.execute('INSERT INTO chat_sessions (patient_id) VALUES (?)', [patientId]);
-  return findById(result.insertId);
+/**
+ * Creates the patient's session, or returns the one that already exists.
+ * patient_id is unique, so when two requests race, the loser's INSERT turns
+ * into a no-op update and both read back the same row. Unlike INSERT IGNORE,
+ * this still raises on any other error (an unknown patient, for one).
+ */
+async function createOrGet(patientId) {
+  await pool.execute(
+    'INSERT INTO chat_sessions (patient_id) VALUES (?) ON DUPLICATE KEY UPDATE patient_id = patient_id',
+    [patientId]
+  );
+  return findByPatientId(patientId);
 }
 
 /** Assigns the first staff member who replies; later replies keep the original assignee. */
@@ -52,4 +60,4 @@ async function findAllWithSummary() {
   return rows;
 }
 
-module.exports = { findById, findByPatientId, create, assignStaff, findAllWithSummary };
+module.exports = { findById, findByPatientId, createOrGet, assignStaff, findAllWithSummary };

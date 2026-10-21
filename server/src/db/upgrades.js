@@ -1,0 +1,87 @@
+/**
+ * In-place upgrades for databases created by an older schema.sql.
+ *
+ * schema.sql only issues CREATE TABLE IF NOT EXISTS, so a change to a table
+ * that already exists never reaches an existing install. Each step here checks
+ * whether it has already been applied, so db:migrate can run any number of
+ * times. A fresh database gets the final shape from schema.sql and every step
+ * finds nothing to do.
+ */
+
+/**
+ * Pure: given every chat session, decides how to fold each patient's
+ * duplicates into one. The earliest session (lowest id) survives; it takes the
+ * first assigned staff member if it had none. Returns one entry per patient
+ * that has more than one session.
+ */
+function planSessionMerges(sessions) {
+  const byPatient = new Map();
+  for (const session of [...sessions].sort((a, b) => a.id - b.id)) {
+    if (!byPatient.has(session.patient_id)) byPatient.set(session.patient_id, []);
+    byPatient.get(session.patient_id).push(session);
+  }
+
+  const merges = [];
+  for (const [patientId, list] of byPatient) {
+    if (list.length < 2) continue;
+    const [keep, ...rest] = list;
+    const staffId = keep.staff_id ?? rest.find((s) => s.staff_id != null)?.staff_id ?? null;
+    merges.push({ patientId, keepId: keep.id, removeIds: rest.map((s) => s.id), staffId });
+  }
+  return merges;
+}
+
+async function indexExists(conn, database, table, index) {
+  const [rows] = await conn.query(
+    'SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME = ? LIMIT 1',
+    [database, table, index]
+  );
+  return rows.length > 0;
+}
+
+/**
+ * One chat session per patient (FR 5). Two "open my session" requests racing
+ * each other (React StrictMode, a double click, two tabs) used to insert two
+ * sessions. Merges any duplicates already stored, moving their messages into
+ * the surviving session, then adds the unique key that stops it recurring.
+ * Returns the number of patients whose sessions were merged.
+ */
+async function ensureOneSessionPerPatient(conn, database) {
+  if (await indexExists(conn, database, 'chat_sessions', 'uq_chat_sessions_patient')) return 0;
+
+  const [sessions] = await conn.query(`SELECT id, patient_id, staff_id FROM \`${database}\`.chat_sessions`);
+  const merges = planSessionMerges(sessions);
+
+  await conn.beginTransaction();
+  try {
+    for (const { keepId, removeIds, staffId } of merges) {
+      await conn.query(`UPDATE \`${database}\`.chat_messages SET chat_session_id = ? WHERE chat_session_id IN (?)`, [keepId, removeIds]);
+      await conn.query(`UPDATE \`${database}\`.chat_sessions SET staff_id = ? WHERE id = ?`, [staffId, keepId]);
+      await conn.query(`DELETE FROM \`${database}\`.chat_sessions WHERE id IN (?)`, [removeIds]);
+    }
+    await conn.commit();
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  }
+
+  // DDL commits implicitly, so it runs only once the data is clean. The unique
+  // key also serves the patient foreign key, so the old plain index goes.
+  await conn.query(`ALTER TABLE \`${database}\`.chat_sessions ADD UNIQUE KEY uq_chat_sessions_patient (patient_id)`);
+  if (await indexExists(conn, database, 'chat_sessions', 'idx_chat_sessions_patient')) {
+    await conn.query(`ALTER TABLE \`${database}\`.chat_sessions DROP INDEX idx_chat_sessions_patient`);
+  }
+  return merges.length;
+}
+
+/**
+ * Runs every upgrade step in order. The database name comes from
+ * configuration, not user input; it is back-quoted because identifiers cannot
+ * be passed as query parameters.
+ */
+async function runUpgrades(conn, database) {
+  const merged = await ensureOneSessionPerPatient(conn, database);
+  if (merged > 0) console.log(`Merged duplicate chat sessions for ${merged} patient(s).`);
+}
+
+module.exports = { runUpgrades, planSessionMerges };

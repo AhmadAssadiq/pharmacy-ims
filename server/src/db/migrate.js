@@ -1,6 +1,7 @@
 /**
- * Creates the database and all six tables from schema.sql, then prints the
- * resulting table list so the schema can be verified.
+ * Creates the database and every table from schema.sql, applies the in-place
+ * upgrades for databases made by an older schema (see upgrades.js), then
+ * prints the resulting table list so the schema can be verified.
  *
  * Usage: npm run db:migrate   (from /server or the repo root)
  */
@@ -8,6 +9,7 @@ const fs = require('fs');
 const path = require('path');
 const mysql = require('mysql2/promise');
 const env = require('../config/env');
+const { runUpgrades } = require('./upgrades');
 
 async function migrate() {
   const schemaPath = path.join(__dirname, 'schema.sql');
@@ -26,6 +28,7 @@ async function migrate() {
 
   try {
     await connection.query(sql);
+    await runUpgrades(connection, env.db.database);
     const [tables] = await connection.query(
       'SELECT TABLE_NAME AS name FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? ORDER BY TABLE_NAME',
       [env.db.database]

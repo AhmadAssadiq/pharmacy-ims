@@ -11,11 +11,15 @@ const { validateMessageContent } = require('../validation/chatValidation');
 const HttpError = require('../utils/httpError');
 const { ROLES } = require('../../../shared/constants.json');
 
-/** Patients have a single session with the pharmacy; it is created on first use. */
+/**
+ * Patients have a single session with the pharmacy; it is created on first use.
+ * The plain read covers the common case; create-or-get covers two first
+ * requests arriving together, which the unique key on patient_id settles.
+ */
 async function getOrCreateSessionForPatient(patientId) {
   const existing = await chatSessionModel.findByPatientId(patientId);
   if (existing) return existing;
-  return chatSessionModel.create(patientId);
+  return chatSessionModel.createOrGet(patientId);
 }
 
 /** Staff unified inbox: every session with its latest message (FR 5.2). */

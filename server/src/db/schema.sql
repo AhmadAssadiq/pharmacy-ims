@@ -46,14 +46,16 @@ CREATE TABLE IF NOT EXISTS medication_batches (
   CONSTRAINT chk_medication_batches_quantity CHECK (quantity >= 0)
 ) ENGINE=InnoDB;
 
--- One chat session per patient; staff_id is set when a staff member replies.
+-- One chat session per patient, enforced by the unique key so two racing
+-- "open my session" requests cannot create a second one. staff_id is set
+-- when a staff member replies.
 CREATE TABLE IF NOT EXISTS chat_sessions (
   id         INT UNSIGNED NOT NULL AUTO_INCREMENT,
   patient_id INT UNSIGNED NOT NULL,
   staff_id   INT UNSIGNED NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
-  KEY idx_chat_sessions_patient (patient_id),
+  UNIQUE KEY uq_chat_sessions_patient (patient_id),
   CONSTRAINT fk_chat_sessions_patient FOREIGN KEY (patient_id) REFERENCES users (id) ON DELETE CASCADE,
   CONSTRAINT fk_chat_sessions_staff   FOREIGN KEY (staff_id)   REFERENCES users (id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
