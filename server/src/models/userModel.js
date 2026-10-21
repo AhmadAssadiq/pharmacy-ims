@@ -26,4 +26,15 @@ async function create({ name, email, passwordHash, role }) {
   return findById(result.insertId);
 }
 
-module.exports = { findByEmail, findById, create };
+/** Replaces the stored bcrypt hash (password reset). */
+async function updatePasswordHash(id, passwordHash, conn = pool) {
+  await conn.execute('UPDATE users SET password_hash = ? WHERE id = ?', [passwordHash, id]);
+}
+
+/** Deletes a user; the foreign keys remove what belongs to them (see schema.sql). */
+async function remove(id, conn = pool) {
+  const [result] = await conn.execute('DELETE FROM users WHERE id = ?', [id]);
+  return result.affectedRows > 0;
+}
+
+module.exports = { findByEmail, findById, create, updatePasswordHash, remove };

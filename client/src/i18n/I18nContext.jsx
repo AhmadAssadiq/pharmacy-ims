@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useContext, useLayoutEffect, useMemo, useState } from 'react';
 import { I18nContext } from './context';
 import en from './en.json';
 import ar from './ar.json';
@@ -62,7 +62,9 @@ export function I18nProvider({ children }) {
   const translate = useMemo(() => createTranslator(DICTIONARIES[lang], locale, en), [lang, locale]);
   const t = useCallback((key, values) => keyed(translate(key, values)), [translate]);
 
-  useEffect(() => {
+  // A layout effect: lang and dir change before paint, and the app title is set
+  // before any page's own (passive) effect, so a page title such as the 404's wins.
+  useLayoutEffect(() => {
     const root = document.documentElement;
     root.lang = lang;
     root.dir = dir;

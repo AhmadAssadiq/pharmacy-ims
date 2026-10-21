@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { fetchMessages, openMySession, postMessage } from '../../api/chat';
+import { fetchMessages, openMySession, postImage, postMessage } from '../../api/chat';
 import ChatWindow from '../../components/chat/ChatWindow';
 import { useAuth } from '../../context/AuthContext';
 import useChatSocket from '../../hooks/useChatSocket';
@@ -16,6 +16,8 @@ export default function PatientChatPage() {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  // Whether anyone at the pharmacy is connected: null until the hub says.
+  const [pharmacyOnline, setPharmacyOnline] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -39,6 +41,8 @@ export default function PatientChatPage() {
 
   const handleEvent = useCallback(
     (frame) => {
+      if (frame.type === 'ready') return setPharmacyOnline(Boolean(frame.presence?.pharmacyOnline));
+      if (frame.type === 'presence' && frame.scope === 'pharmacy') return setPharmacyOnline(frame.online);
       if (frame.type !== 'message' || !session || frame.message.chat_session_id !== session.id) return;
       setMessages((prev) => (prev.some((m) => m.id === frame.message.id) ? prev : [...prev, frame.message]));
     },
@@ -56,6 +60,18 @@ export default function PatientChatPage() {
     }
   };
 
+  const handleSendImage = async (file, caption) => {
+    const { message } = await postImage(session.id, file, caption);
+    setMessages((prev) => (prev.some((m) => m.id === message.id) ? prev : [...prev, message]));
+  };
+
+  // While our own socket is down the pharmacy's presence is unknown, not "offline".
+  const known = status === 'online' && pharmacyOnline !== null;
+  const presence = {
+    online: known && pharmacyOnline,
+    label: !known ? t('presence.unknown') : pharmacyOnline ? t('presence.pharmacyOnline') : t('presence.pharmacyOffline'),
+  };
+
   return (
     <>
       <div className="page-header">
@@ -64,9 +80,11 @@ export default function PatientChatPage() {
       <ChatWindow
         title={t('chat.staffWindowTitle')}
         subtitle={session?.staff_id ? t('chat.pharmacistJoined') : t('chat.waitingForPharmacist')}
+        presence={presence}
         messages={messages}
         currentUserId={user.id}
         onSend={handleSend}
+        onSendImage={handleSendImage}
         status={status}
         loading={loading}
         error={error}

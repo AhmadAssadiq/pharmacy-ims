@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useI18n } from '../i18n/I18nContext';
 import { ROLES } from '../utils/routes';
@@ -18,6 +18,8 @@ const STAFF_LINKS = [
 const PATIENT_LINKS = [
   { to: '/patient/availability', label: 'nav.availability' },
   { to: '/patient/chat', label: 'nav.patientChat' },
+  { to: '/patient/about', label: 'nav.about' },
+  { to: '/contact', label: 'nav.contact' },
 ];
 
 /** The product's mark: a dispensing cross, drawn in the chrome tokens so it follows the theme. */
@@ -65,10 +67,18 @@ export default function Layout() {
           <Clock />
           <LanguageToggle />
           <ThemeToggle />
-          <span className="topbar__who">
-            <span>{user.name}</span>
-            <span className="topbar__role">{isStaff ? t('nav.roleStaff') : t('nav.rolePatient')}</span>
-          </span>
+          {isStaff ? (
+            <span className="topbar__who">
+              <span>{user.name}</span>
+              <span className="topbar__role">{t('nav.roleStaff')}</span>
+            </span>
+          ) : (
+            // A patient's name opens their account page (delete account lives there).
+            <Link to="/patient/account" className="topbar__who topbar__who--link" title={t('account.linkTitle')}>
+              <span><bdi>{user.name}</bdi></span>
+              <span className="topbar__role">{t('account.linkLabel')}</span>
+            </Link>
+          )}
           <button type="button" className="btn btn--sm" onClick={handleLogout}>
             {t('nav.logout')}
           </button>

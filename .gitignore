@@ -24,3 +24,6 @@ ml-service/models/*.joblib
 .idea/
 .DS_Store
 Thumbs.db
+
+# Chat image attachments (patient data, never committed)
+server/uploads/

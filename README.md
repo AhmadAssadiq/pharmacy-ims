@@ -6,6 +6,8 @@ for Technology. Prepared by **Abdallah Hasan** and **Ahmad Sadiq**, supervised b
 
 A web application that combines pharmacy inventory management, real-time patient/staff
 chat, and machine-learning reorder alerts, built exactly to the GP1 software documentation.
+GP2 adds dispensing, forecast charts, preorders, image messages, online status, password
+reset, account deletion, dark mode and a full Arabic (right-to-left) interface.
 
 ## Repository layout
 
@@ -22,17 +24,21 @@ The server follows a routes -> controllers -> services -> models layering (NFR 5
 ```
 server/src
   config/        environment + MySQL pool
-  db/            schema.sql, migrate.js, seed.js
+  db/            schema.sql, migrate.js (+ upgrades.js: in-place upgrades), seed.js
   models/        one data-access module per table (parameterized queries only)
   services/      business logic (auth, medications, chat, forecast, availability)
   controllers/   HTTP handlers
   routes/        Express routers + auth / role middleware wiring
   middleware/    authenticate, requireRole, errorHandler
   validation/    pure input validation (unit tested)
-  ws/            WebSocket chat hub
+  ws/            WebSocket chat hub + presence.js (who is online)
   jobs/          scheduled forecast job
-  utils/         stock flags, HttpError, asyncHandler
+  utils/         stock flags, FEFO, HttpError, reset tokens, image sniffing, upload store
 ```
+
+The client keeps the same split, plus `client/src/i18n/` (English and Arabic dictionaries and
+the translator), `client/src/context/ThemeContext.jsx` (light / dark / system) and
+`client/src/config/pharmacy.js` (the pharmacy's own details, see below).
 
 ## Prerequisites
 
@@ -83,6 +89,13 @@ cp server/.env.example server/.env
 Edit `server/.env` and set at least `DB_PASSWORD` (if your MySQL root has one) and a random
 `JWT_SECRET`.
 
+| Variable | Default | Purpose |
+|---|---|---|
+| `PORT`, `DB_*`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `CLIENT_ORIGIN`, `ML_SERVICE_URL`, `FORECAST_CRON` | see `.env.example` | as before |
+| `AUTH_RESET_DEBUG` | `false` | `true` prints password reset links to the server console (development only; ignored when `NODE_ENV=production`). There is no mail service yet - see "Password reset" |
+| `UPLOADS_DIR` | `server/uploads` | where chat images are stored; created at start-up, git-ignored |
+| `NODE_ENV` | `development` | set to `production` in production |
+
 `server/.env` is git-ignored, so it never arrives with a clone - you must create it on every new
 machine. The server scripts run with `node --env-file=.env` and will refuse to start if the file
 is missing.
@@ -94,13 +107,23 @@ npm run db:migrate
 npm run db:seed
 ```
 
-`db:migrate` creates the `pharmacy_ims` database with seven tables (`users`, `medications`,
-`medication_batches`, `chat_sessions`, `chat_messages`, `sales_history`, `reorder_alerts`).
-`db:seed` creates the demo accounts, a starter catalog held as dated stock lots and 90 days of
-synthetic sales history.
+`db:migrate` creates the `pharmacy_ims` database with nine tables (`users`, `medications`,
+`medication_batches`, `chat_sessions`, `chat_messages`, `sales_history`, `reorder_alerts`,
+`preorders`, `password_resets`). `db:seed` creates the demo accounts, a starter catalog held as
+dated stock lots and 90 days of synthetic sales history.
 
-`db:migrate` only issues `CREATE TABLE IF NOT EXISTS`, so it cannot apply schema changes to
-tables that already exist. After a schema change, rebuild the database instead:
+`schema.sql` only issues `CREATE TABLE IF NOT EXISTS`, so on its own it cannot change a table that
+already exists. `db:migrate` therefore also runs `server/src/db/upgrades.js`, whose steps check
+whether they are needed and are safe to re-run. **An existing database upgrades in place with
+`npm run db:migrate`; no reset is needed for the GP2 changes.** The steps so far:
+
+- one chat session per patient: merges duplicate sessions (moving their messages), then adds a
+  unique key on `chat_sessions.patient_id`;
+- image attachments: adds `attachment_path`, `attachment_mime`, `attachment_size`,
+  `attachment_name` (and a unique key on the path) to `chat_messages`.
+
+New tables need nothing special: `CREATE TABLE IF NOT EXISTS` adds them. To start from a clean
+slate (seed data goes stale after a few weeks):
 
 ```bash
 npm run db:reset      # drops the database, then migrates and seeds it again
@@ -135,16 +158,24 @@ npm run dev
 
 Open <http://localhost:5173>.
 
-The staff portal has five pages: **Inventory** (stock levels, flags and per-medication reorder
+The staff portal has six pages: **Inventory** (stock levels, flags and per-medication reorder
 thresholds), **Add stock** (receive a lot, or add a medication the catalog does not carry yet),
-**Dispense** (record a multi-item sale), **Forecast** (per-medication demand charts) and
-**Chat inbox**. The ML service only needs to be running for the forecast features.
+**Dispense** (record a multi-item sale), **Preorders** (patient requests for out-of-stock
+medication), **Forecast** (per-medication demand charts) and **Chat inbox**. The patient portal
+has **Medication availability** (with preorder requests), **Chat with pharmacy**, **About**,
+**Contact** and, behind the patient's name in the top bar, **Your account**. **Contact** and the
+**404** page also work signed out. The ML service only needs to be running for the forecast
+features.
+
+Every page has a live date and time, a language switch (English / العربية) and a theme switch
+(system / light / dark) in the top bar; the signed-out pages have the language and theme switches
+and a Contact link.
 
 ### Useful commands
 
 | Command | What it does |
 |---|---|
-| `npm test` | Runs the server unit tests (auth validation, lockout, role middleware, medication validation, stock flags, FEFO allocation) |
+| `npm test` | Runs the unit tests (92): validation, lockout, roles, stock flags, FEFO, preorders, reset tokens, rate limiter, presence, image sniffing, account deletion, the i18n dictionaries and the translator |
 | `npm run db:reset` | Drops, migrates and re-seeds the database (needed after a schema change) |
 | `npm run forecast -w server` | Runs the ML forecast / reorder-alert check once and prints the result |
 | `npm run build -w client` | Production build of the React app into `client/dist` |
@@ -167,6 +198,15 @@ thresholds), **Add stock** (receive a lot, or add a medication the catalog does 
 | NFR 2.3 - lock after 5 failed logins | `server/src/services/loginAttemptService.js` (15-minute lock) |
 | NFR 3.2 - desktop and mobile | responsive CSS in `client/src/styles.css` |
 | NFR 5.1 - modular code | layering described above |
+| Live clock (GP2 addition) | `client/src/components/Clock.jsx` |
+| Dark mode (GP2 addition) | `client/src/context/ThemeContext.jsx`, `ThemeToggle.jsx`, dark token set in `styles.css`, pre-paint script in `client/index.html` |
+| Arabic / RTL (GP2 addition) | `client/src/i18n/`, `LanguageToggle.jsx`, logical CSS properties, error `code`s from `server/src/utils/httpError.js` |
+| Preorders (GP2 addition) | `server/src/services/preorderService.js` (collect = FEFO dispense in one transaction), `PatientAvailabilityPage.jsx`, `StaffPreordersPage.jsx` |
+| Forgot password (GP2 addition) | `server/src/services/passwordResetService.js`, `utils/resetToken.js`, `ForgotPasswordPage.jsx`, `ResetPasswordPage.jsx` |
+| Online status (GP2 addition) | `server/src/ws/presence.js`, `chatHub.js`; `ChatWindow.jsx` (`PresenceMark`) |
+| Image messages (GP2 addition) | `server/src/utils/imageSniff.js`, `uploadStore.js`, `chatService.sendImage`; `ChatWindow.jsx`, `ChatImage.jsx` |
+| Delete account (GP2 addition) | `authService.deleteOwnAccount`, `middleware/authenticate.js` (user must still exist), `PatientAccountPage.jsx` |
+| 404, About, Contact (GP2 addition) | `NotFoundPage.jsx`, `PatientAboutPage.jsx`, `ContactPage.jsx`, `client/src/config/pharmacy.js` |
 
 Thresholds live in `shared/constants.json`:
 
@@ -176,6 +216,12 @@ Thresholds live in `shared/constants.json`:
 | `NEAR_EXPIRY_DAYS` | 30 | near-expiry flag (FR 4) |
 | `FORECAST_HORIZON_DAYS` | 7 | reorder alert window (FR 6.2) |
 | `MAX_LOGIN_ATTEMPTS` / `LOCKOUT_MINUTES` | 5 / 15 | login lockout (NFR 2.3) |
+| `PASSWORD_MIN_LENGTH` | 8 | registration and password reset |
+| `PASSWORD_RESET_MINUTES` | 15 | how long a reset link works |
+| `PREORDER_MAX_QUANTITY` / `PREORDER_NOTE_MAX_LENGTH` | 100 / 500 | preorder limits |
+| `CHAT_MESSAGE_MAX_LENGTH` | 2000 | message and image caption length |
+| `CHAT_IMAGE_MAX_BYTES` / `CHAT_IMAGE_TYPES` | 5 MB / PNG, JPEG, WebP, GIF | image messages |
+| `ERROR_CODES` | - | stable codes the server sends with user-visible errors, translated by the client |
 
 ## How the forecasting works
 
@@ -198,13 +244,18 @@ Thresholds live in `shared/constants.json`:
 
 ## API summary
 
-All endpoints are under `/api` and, except register/login, require `Authorization: Bearer <jwt>`.
+All endpoints are under `/api` and, except register, login, forgot-password and reset-password,
+require `Authorization: Bearer <jwt>` for a user that still exists. Errors are
+`{ error, code?, params?, details? }`: `error` is English, `code` is one of `ERROR_CODES`.
 
 | Method | Path | Role | Purpose |
 |---|---|---|---|
 | POST | `/auth/register` | public | create a patient account |
 | POST | `/auth/login` | public | sign in (locks after 5 failures) |
 | GET | `/auth/me` | any | current user |
+| DELETE | `/auth/me` | patient | delete your own account `{ password }`; staff get 403 |
+| POST | `/auth/forgot-password` | public | `{ email }`; always the same 200 answer (rate limited) |
+| POST | `/auth/reset-password` | public | `{ token, password }` (rate limited) |
 | GET/POST | `/medications` | staff | list / add medication (adding also creates its opening stock lot) |
 | GET/PUT/DELETE | `/medications/:id` | staff | read / update catalog fields / delete |
 | GET/POST | `/medications/:id/batches` | staff | list stock lots / receive a new lot (UC-1) |
@@ -218,8 +269,62 @@ All endpoints are under `/api` and, except register/login, require `Authorizatio
 | GET | `/chat/sessions` | staff | unified inbox |
 | GET | `/chat/sessions/:id/messages` | participant | message history |
 | POST | `/chat/sessions/:id/messages` | participant | send (HTTP fallback; also pushed over WebSocket) |
+| POST | `/chat/sessions/:id/attachments` | participant | multipart: `image` (PNG/JPEG/WebP/GIF, max 5 MB) + optional `caption` |
+| GET | `/chat/attachments/:key` | participant | the image, after re-checking access |
+| POST | `/preorders` | patient | request an out-of-stock medication `{ medication_id, quantity, note? }` |
+| GET | `/preorders/mine` | patient | your own requests |
+| POST | `/preorders/:id/cancel` | patient | cancel your own pending request |
+| GET | `/preorders` | staff | all requests, newest first, `?status=` optional |
+| PATCH | `/preorders/:id` | staff | `{ status }`: pending -> ready / cancelled, ready -> collected / cancelled |
 | GET | `/availability` | any | in-stock / out-of-stock list |
-| WS | `/ws?token=<jwt>` | any | real-time chat channel |
+| WS | `/ws?token=<jwt>` | any | real-time chat channel, plus `presence` frames |
+
+## Notes on the GP2 features
+
+**Languages.** English and Arabic, chosen in the top bar (stored as `pims_lang`; the default
+follows the browser). Arabic switches the whole layout to right to left through logical CSS
+properties; charts stay left to right, as is usual for time series. Arabic keeps Western digits
+(`ar-JO-u-nu-latn`) so quantities and prices read the same to everyone, and Jordanian month
+names. Every string lives in `client/src/i18n/en.json` and `ar.json`; a unit test fails if the
+two files ever have different keys or an error code has no translation. Stored data (medication
+names, categories, suppliers) is shown as entered. The Arabic font, IBM Plex Sans Arabic, loads
+only when Arabic is chosen.
+
+**Password reset.** `POST /auth/forgot-password` answers identically for any email and issues
+the token after the response, so neither the body nor the timing reveals which emails have
+accounts. A link holds a 32-byte random token; only its SHA-256 is stored, it works once, for 15
+minutes, and a newer link retires older ones. **There is no mail service.** For local testing
+set `AUTH_RESET_DEBUG=true` in `server/.env` and the link appears in the server console.
+**Before production, add an SMTP server or a mail provider's API** at the `TODO(production)` in
+`server/src/services/passwordResetService.js`; until then nobody receives a reset link. Both
+endpoints are rate limited in memory per IP (and per email for forgot-password); behind a
+reverse proxy, set Express's `trust proxy` so the limiter sees client addresses.
+
+**Online status.** Presence is in memory only (`server/src/ws/presence.js`): nothing is written
+to the database on connect or disconnect, it resets when the server restarts, and there is
+therefore no "last seen". Staff see which patients are online; a patient only learns whether
+anyone at the pharmacy is online. A closed laptop goes offline within about a minute through the
+WebSocket heartbeat.
+
+**Image messages.** Uploads are sniffed by their bytes (SVG is always refused), written to
+`UPLOADS_DIR` under a random UUID name, and served only by the authenticated route, which
+re-checks access and sends `nosniff` and a sandboxing CSP. The folder is never served
+statically. Deleting a patient's account also deletes their conversation's image files.
+
+**Account deletion.** Patients only, confirmed with their password (a wrong one counts toward
+the login lockout). The foreign keys remove the patient's chat session (with every message in it,
+staff replies included), preorders and reset tokens; `sales_history` has no link to users, so
+dispensing records and the forecast are untouched. `authenticate` checks that the user still
+exists on every request, so a deleted account's token stops working immediately, and the
+patient's open sockets are closed.
+
+**The pharmacy's details.** `client/src/config/pharmacy.js` holds the name, address, map
+query, phone, email, licence number and opening hours used by About and Contact. **Every value
+there is a placeholder** and must be replaced with the real pharmacy's details.
+
+**Deploying the client.** The app routes in the browser, so the static host must serve
+`index.html` for unknown paths (a "single-page app" fallback); otherwise the 404 page, and any
+reload on a deep link, never renders.
 
 ## Testing
 

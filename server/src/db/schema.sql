@@ -60,15 +60,25 @@ CREATE TABLE IF NOT EXISTS chat_sessions (
   CONSTRAINT fk_chat_sessions_staff   FOREIGN KEY (staff_id)   REFERENCES users (id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
--- Persisted chat log (FR 5.1).
+-- Persisted chat log (FR 5.1). A message is text, an image, or an image with
+-- a caption. content stays NOT NULL: an image-only message stores '' and the
+-- rule "text or an image" is enforced in validation/chatValidation.js. The
+-- image itself is a file on disk; attachment_path holds only its generated
+-- name (never the client's filename), and attachment_name a sanitised copy of
+-- the original name for the download header (GP2 addition).
 CREATE TABLE IF NOT EXISTS chat_messages (
   id              INT UNSIGNED NOT NULL AUTO_INCREMENT,
   chat_session_id INT UNSIGNED NOT NULL,
   sender_id       INT UNSIGNED NOT NULL,
   content         TEXT NOT NULL,
+  attachment_path VARCHAR(64) NULL,
+  attachment_mime VARCHAR(20) NULL,
+  attachment_size INT UNSIGNED NULL,
+  attachment_name VARCHAR(120) NULL,
   timestamp       DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   PRIMARY KEY (id),
   KEY idx_chat_messages_session (chat_session_id, timestamp),
+  UNIQUE KEY uq_chat_messages_attachment (attachment_path),
   CONSTRAINT fk_chat_messages_session FOREIGN KEY (chat_session_id) REFERENCES chat_sessions (id) ON DELETE CASCADE,
   CONSTRAINT fk_chat_messages_sender  FOREIGN KEY (sender_id)       REFERENCES users (id)         ON DELETE CASCADE
 ) ENGINE=InnoDB;
@@ -100,6 +110,23 @@ CREATE TABLE IF NOT EXISTS preorders (
   CONSTRAINT fk_preorders_patient    FOREIGN KEY (patient_id)    REFERENCES users (id)       ON DELETE CASCADE,
   CONSTRAINT fk_preorders_medication FOREIGN KEY (medication_id) REFERENCES medications (id) ON DELETE CASCADE,
   CONSTRAINT chk_preorders_quantity CHECK (quantity > 0)
+) ENGINE=InnoDB;
+
+-- Password reset tokens (GP2 addition). Only the SHA-256 hash of a token is
+-- stored, so a leaked table cannot be used to reset anyone's password. A token
+-- is single use (used_at) and short lived (expires_at); requesting a new one
+-- marks the user's earlier unused tokens used. Deleting a user removes theirs.
+CREATE TABLE IF NOT EXISTS password_resets (
+  id          INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id     INT UNSIGNED NOT NULL,
+  token_hash  CHAR(64) NOT NULL,
+  expires_at  DATETIME NOT NULL,
+  used_at     DATETIME NULL,
+  created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_password_resets_token (token_hash),
+  KEY idx_password_resets_user (user_id),
+  CONSTRAINT fk_password_resets_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 -- Historical sales used to train the forecasting model (FR 6.1).

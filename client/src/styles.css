@@ -374,6 +374,14 @@ a:hover { color: var(--link-hover); }
 .topbar__time { font-weight: 500; }
 .topbar__date { font-size: var(--fs-small); color: var(--muted); }
 .topbar__role { font-size: var(--fs-small); color: var(--muted); }
+.topbar__who--link { text-decoration: none; color: var(--text); border-radius: var(--radius-control); padding: 2px 6px; margin: -2px -6px; }
+.topbar__who--link:hover { background: var(--raised); }
+.topbar__who--link:hover .topbar__role { text-decoration: underline; }
+
+/* The one destructive card: the edge is the status hue, the rest stays ink. */
+.card--danger { border-color: var(--danger-border); }
+.card--danger h2 { color: var(--negative); }
+.danger-list { margin: 0 0 12px; padding-inline-start: 18px; }
 
 @media (max-width: 720px) {
   .topbar__who { display: none; }
@@ -1004,6 +1012,22 @@ input[aria-invalid='true'], select[aria-invalid='true'] { border-color: var(--ne
 .chat-bubble__meta { display: block; font-size: var(--fs-small); opacity: 0.8; margin-top: 3px; }
 
 .chat-window__form { display: flex; gap: 8px; margin-top: 12px; }
+
+/* Chat images (GP2 addition): bounded thumbnails, the space reserved while loading. */
+.chat-image { display: block; margin-bottom: 4px; }
+.chat-image img { display: block; max-width: min(240px, 100%); max-height: 240px; border-radius: 6px; }
+.chat-image--loading { width: 160px; height: 120px; border-radius: 6px; background: var(--raised); }
+.chat-image--failed { font-size: var(--fs-small); color: var(--muted); }
+.chat-bubble--mine .chat-image--loading { background: var(--selected); }
+
+.chat-composer__preview { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+.chat-composer__preview img { width: 56px; height: 56px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); }
+.chat-composer__preview .muted { flex: 1; font-size: var(--fs-small); }
+
+/* The real file input is visually hidden; its keyboard focus shows on the button. */
+.chat-window__attach { flex: none; cursor: pointer; }
+.chat-window__file:focus-visible + .chat-window__attach { outline: 3px solid var(--chart-3); outline-offset: 2px; }
+.chat-window__file:disabled + .chat-window__attach { opacity: 0.55; cursor: not-allowed; }
 .chat-window__form input { flex: 1; }
 
 /* ---------- States ---------- */
@@ -1050,6 +1074,12 @@ input[aria-invalid='true'], select[aria-invalid='true'] { border-color: var(--ne
 }
 
 .status-dot--online { background: var(--positive); }
+
+/* Someone else's presence: a dot and a word, never the dot alone. */
+.presence { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-small); color: var(--muted); font-weight: 400; }
+
+/* Our own socket, only while it is not live: words, no dot, so it cannot pass for presence. */
+.chat-window__connection { margin: 6px 0 0; font-size: var(--fs-small); color: var(--pill-warning-ink); }
 
 /* ---------- Stock lots ---------- */
 .batch-panel { padding: 4px 0 0; }
@@ -1105,8 +1135,42 @@ input[aria-invalid='true'], select[aria-invalid='true'] { border-color: var(--ne
 }
 
 .auth-card { width: 100%; max-width: 400px; }
+.auth-card--wide { max-width: 560px; }
+
+/* ---------- Content pages: 404, About, Contact (GP2 addition) ---------- */
+/* A readable measure; headings in the same ink as everywhere else. */
+.prose { max-width: 72ch; }
+.prose h2 { margin-top: 24px; }
+.prose h2:first-child { margin-top: 0; }
+.prose__lead { font-size: 15px; }
+.prose__fine { font-size: var(--fs-small); margin-top: 16px; }
+
+.service-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.service-list h3 { margin-bottom: 2px; }
+.service-list p { margin: 0; color: var(--muted); }
+
+.hours, .contact-list { margin: 0; display: grid; gap: 8px; }
+.hours__row, .contact-list > div { display: grid; grid-template-columns: minmax(8rem, 12rem) 1fr; gap: 12px; }
+.hours dt, .contact-list dt { color: var(--muted); }
+.hours dd, .contact-list dd { margin: 0; }
+.contact-list address { font-style: normal; margin-bottom: 2px; }
+@media (max-width: 520px) {
+  .hours__row, .contact-list > div { grid-template-columns: 1fr; gap: 2px; }
+}
+
+.contact-primary { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 8px; }
+.contact-primary p { margin: 0; flex: 1 1 16rem; }
+
+.not-found__path code {
+  padding: 2px 6px;
+  border-radius: var(--radius-chip);
+  background: var(--raised);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
 .auth-card__title { text-align: center; }
 .auth-card__footer { text-align: center; margin-bottom: 0; color: var(--muted); }
+.auth-card__aside { margin: -4px 0 12px; font-size: var(--fs-small); text-align: end; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }

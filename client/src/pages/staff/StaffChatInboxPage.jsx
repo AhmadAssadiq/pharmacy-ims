@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { fetchMessages, fetchSessions, postMessage } from '../../api/chat';
-import ChatWindow from '../../components/chat/ChatWindow';
+import { fetchMessages, fetchSessions, postImage, postMessage } from '../../api/chat';
+import ChatWindow, { PresenceMark } from '../../components/chat/ChatWindow';
 import { useAuth } from '../../context/AuthContext';
 import useChatSocket from '../../hooks/useChatSocket';
 import { useI18n } from '../../i18n/I18nContext';
@@ -19,10 +19,15 @@ export default function StaffChatInboxPage() {
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [error, setError] = useState(null);
+  // patientId -> online. Seeded by the sessions list, then kept current by the hub.
+  const [online, setOnline] = useState({});
 
   useEffect(() => {
     fetchSessions()
-      .then((data) => setSessions(data.sessions))
+      .then((data) => {
+        setSessions(data.sessions);
+        setOnline((prev) => ({ ...Object.fromEntries(data.sessions.map((s) => [s.patient_id, s.online])), ...prev }));
+      })
       .catch((err) => setError(err))
       .finally(() => setLoadingSessions(false));
   }, []);
@@ -48,6 +53,20 @@ export default function StaffChatInboxPage() {
 
   const handleEvent = useCallback(
     (frame) => {
+      if (frame.type === 'ready') {
+        // The snapshot is the whole truth at this moment: everyone not in it is offline.
+        const ids = new Set(frame.presence?.patients ?? []);
+        setOnline((prev) => {
+          const next = Object.fromEntries(Object.keys(prev).map((id) => [id, false]));
+          for (const id of ids) next[id] = true;
+          return next;
+        });
+        return;
+      }
+      if (frame.type === 'presence' && frame.scope === 'patient') {
+        setOnline((prev) => ({ ...prev, [frame.userId]: frame.online }));
+        return;
+      }
       if (frame.type !== 'message') return;
       const { message, session } = frame;
 
@@ -60,6 +79,7 @@ export default function StaffChatInboxPage() {
           patient_name: session.patient_name,
           staff_id: session.staff_id,
           last_message: message.content,
+          last_message_has_image: Boolean(message.attachment),
           last_message_at: message.timestamp,
         };
         return [updated, ...rest];
@@ -82,7 +102,13 @@ export default function StaffChatInboxPage() {
     }
   };
 
+  const handleSendImage = async (file, caption) => {
+    const { message } = await postImage(selectedId, file, caption);
+    setMessages((prev) => (prev.some((m) => m.id === message.id) ? prev : [...prev, message]));
+  };
+
   const selected = sessions.find((s) => s.id === selectedId);
+  const isOnline = (patientId) => status === 'online' && Boolean(online[patientId]);
 
   return (
     <>
@@ -106,10 +132,20 @@ export default function StaffChatInboxPage() {
                   onClick={() => setSelectedId(s.id)}
                 >
                   <span>
-                    <strong><bdi>{s.patient_name}</bdi></strong>
+                    <strong><bdi>{s.patient_name}</bdi></strong>{' '}
+                    <PresenceMark
+                      online={isOnline(s.patient_id)}
+                      label={isOnline(s.patient_id) ? t('presence.patientOnline') : t('presence.patientOffline')}
+                    />
                     <br />
                     <span className="muted" style={{ fontSize: '0.85rem' }}>
-                      {s.last_message ? <bdi>{s.last_message.slice(0, 40)}</bdi> : t('chat.noMessagesYet')}
+                      {s.last_message ? (
+                        <bdi>{s.last_message.slice(0, 40)}</bdi>
+                      ) : s.last_message_has_image ? (
+                        t('chat.imagePreview')
+                      ) : (
+                        t('chat.noMessagesYet')
+                      )}
                     </span>
                   </span>
                   <span className="muted" style={{ fontSize: '0.75rem', whiteSpace: 'nowrap' }}>
@@ -125,9 +161,14 @@ export default function StaffChatInboxPage() {
           <ChatWindow
             title={selected.patient_name}
             subtitle={selected.staff_id ? t('chat.assigned') : t('chat.unassigned')}
+            presence={{
+              online: isOnline(selected.patient_id),
+              label: isOnline(selected.patient_id) ? t('presence.patientOnline') : t('presence.patientOffline'),
+            }}
             messages={messages}
             currentUserId={user.id}
             onSend={handleSend}
+            onSendImage={handleSendImage}
             status={status}
             loading={loadingMessages}
           />

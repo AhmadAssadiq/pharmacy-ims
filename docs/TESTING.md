@@ -1,19 +1,30 @@
 # Testing and Verification Report
 
-Environment: Windows 10, Node.js 22.16, Python 3.13 (scikit-learn 1.6.1), MySQL 8.4.9,
-all three services running locally. Date: 2026-09-15.
+Environment: Windows 10, Node.js 22.16, MySQL 8.4.9, all three services running locally.
+Sections 2-4 were recorded on 2026-09-15 (Python 3.13, scikit-learn 1.6.1); section 5 covers the
+GP2 additions and was recorded on 2026-10-21.
 
 ## 1. Unit tests (`npm test`)
 
-Runner: Node's built-in `node:test`. 23 tests, all passing.
+Runner: Node's built-in `node:test`. 92 tests in 16 files, all passing (2026-10-21).
 
 | File | Covers |
 |---|---|
 | `server/test/authValidation.test.js` | register/login payload validation, email normalisation, password length |
 | `server/test/loginAttempt.test.js` | lock after 5 failures, lock expiry, reset on success, per-account tracking (NFR 2.3) |
 | `server/test/requireRole.test.js` | staff allowed, patient rejected with 403, anonymous rejected with 401 (NFR 2.2) |
+| `server/test/authenticate.test.js` | valid token accepted; a deleted user's token refused at once; name and role taken from the database; missing or forged token refused |
 | `server/test/medicationValidation.test.js` | all six FR 3.1 fields required, negative / non-integer quantity rejected (UC-1), invalid dates, negative price |
 | `server/test/stockFlags.test.js` | low-stock threshold, out of stock, 30-day near-expiry boundary, expired (FR 4) |
+| `server/test/fefo.test.js`, `salesValidation.test.js` | nearest-expiry-first allocation, expired lots never dispensed, sale basket validation |
+| `server/test/sessionMerge.test.js` | folding a patient's duplicate chat sessions into one (the in-place upgrade) |
+| `server/test/preorderValidation.test.js` | preorder request rules (quantity cap, note length), every allowed and forbidden status transition |
+| `server/test/passwordReset.test.js` | reset token shape and SHA-256, expiry and single use, the rate limiter, forgot / reset validation |
+| `server/test/presence.test.js` | first-socket / last-socket edges, several tabs, idempotent disconnect, the pharmacy's online edge |
+| `server/test/attachments.test.js` | magic-byte sniffing (PNG, JPEG, GIF, WebP; SVG and others refused), upload and caption rules, display-name sanitising, Content-Disposition |
+| `server/test/accountDeletion.test.js` | password required, only patients may self-delete (staff 403), a locked account cannot delete |
+| `server/test/i18nDictionaries.test.js` | `en.json` and `ar.json` have exactly the same keys; every server error code is translated in both |
+| `server/test/translate.test.js` | Arabic and English plural forms, isolation of interpolated names, fallbacks, element parts, date and price formats |
 
 ## 2. Non-functional requirements - manual verification
 
@@ -65,3 +76,23 @@ Runner: Node's built-in `node:test`. 23 tests, all passing.
 - `npm run build -w client` produces a production bundle (~60 kB gzipped JS).
 - Unauthenticated WebSocket connections are closed with code 4401.
 - Schema verified in MySQL with `information_schema.COLUMNS`: exactly the six specified tables and columns.
+
+## 5. GP2 additions - verification (2026-10-21)
+
+Each feature was exercised in the browser as staff and as a patient, and its server rules over
+HTTP and WebSocket with scripts. Where a script needed an extra account it created a temporary
+one and deleted it afterwards.
+
+| Feature | Verified | Not verified |
+|---|---|---|
+| Live clock | `<time>` with a machine-readable `dateTime`, tabular digits, no live region; the page under it does not re-render; the minute turns within a second; one interval, cleared on sign-out; both roles; phone width | with a screen reader |
+| Dark mode | follows the OS while on "system"; each toggle step stored and applied; stored choice applied before first paint (no light flash in the production build); every screen checked in dark; all 41 colour tokens have a dark value; contrast measured (text >= 11.6:1, muted >= 5.6:1, input border 4.6:1, pills >= 9.5:1) | a real OS-level switch (emulated in the browser) |
+| Arabic / RTL | every page in Arabic for both roles; layout mirrors (row edge, chat bubbles, dialogs); charts stay LTR with labels inside the frame; Latin data kept in order with `<bdi>`; server errors arrive as codes and are translated (e.g. "تتبقى 4 محاولات"); phone width with no horizontal scroll | with a screen reader in Arabic |
+| One chat session per patient | the dev database's duplicates merged with no message lost; second `db:migrate` a no-op; five concurrent first opens -> one session; fresh install gets the unique key from `schema.sql` | - |
+| Preorders | request, duplicate -> 409, unknown medication -> 404, patient blocked from staff endpoints (403); cancel own, another patient's -> 404; ready -> collected with only expired stock -> 409, status unchanged, nothing dispensed; after receiving a lot, collected -> that lot 10 -> 8 and one `sales_history` row; finished requests cannot move (400); deleting a patient removes their requests | - |
+| Forgot password | same status and body for existing and unknown emails, ~2 ms either way; per-email limit -> 429; older link retired by a newer one; reused and expired links refused; mismatched confirmation caught; reset clears the login lockout and does not sign in; old password refused, new one works; deleting the user removes their tokens | a real email (there is no mail service) |
+| Online status | staff `ready` snapshot; staff told when a patient arrives and leaves; a patient never hears about other patients; inbox `online` flag; heartbeat dropped a socket that ignored pings after 49 s; staff UI flips online / offline live | patients seeing "pharmacy offline" live, because another staff client was connected during the test (covered by `presence.test.js`) |
+| Image messages | valid PNG stored under a UUID name and pushed live; SVG sent as `image/png` -> refused (ATTACHMENT_TYPE); 6 MB -> 413; long caption -> 400; nothing written for rejected uploads; another patient -> 403 for upload and download; no token -> 401; download headers (sniffed type, `nosniff`, sandbox CSP, Content-Disposition, private long cache); path traversal -> 404; folder not served statically; browser: thumbnail via blob URL, preview, caption, sending state, SVG refused on the client, staff sees the image with sender alt text | upload progress (only a sending state is shown) |
+| Delete account | wrong password -> stays signed in, counts toward lockout; correct password -> signed out to login with a notice; old token -> 401 at once; open socket closed with 4401; user, session, messages (staff replies included), preorders, reset tokens and the image file all removed; staff self-delete -> 403 | - |
+| 404 page | signed out in the signed-out frame with "Go to sign in"; signed in inside the normal layout with the right home link; requested path shown; tab title set in both languages; `/` and wrong-role redirects unchanged | - |
+| About / Contact | placeholders from `config/pharmacy.js`; `tel:` and `mailto:` links; plain maps link; opening hours; Contact in both frames, "Message the pharmacy" only for a signed-in patient; nav and signed-out links; Arabic and dark mode | - |

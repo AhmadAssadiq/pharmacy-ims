@@ -13,6 +13,8 @@ export default function LoginPage() {
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const errorRef = useRef(null);
+  // A dictionary key handed over by another page, e.g. after a password reset.
+  const notice = location.state?.notice ?? null;
 
   // The submit button is aria-disabled rather than disabled while the request is
   // in flight, because a disabled button drops keyboard focus to the page body.
@@ -45,6 +47,11 @@ export default function LoginPage() {
       <h1 className="auth-card__title">{t('auth.loginTitle')}</h1>
       <p className="muted">{t('auth.loginSubtitle')}</p>
 
+      {notice && (
+        <div className="alert alert--success" role="status">
+          {t(notice)}
+        </div>
+      )}
       {error && (
         <div className="alert alert--error" role="alert" tabIndex={-1} ref={errorRef}>
           {error}
@@ -59,6 +66,9 @@ export default function LoginPage() {
         <span className="field__label">{t('auth.password')}</span>
         <input name="password" type="password" value={form.password} onChange={handleChange} required autoComplete="current-password" />
       </label>
+      <p className="auth-card__aside">
+        <Link to="/forgot-password">{t('reset.forgotLink')}</Link>
+      </p>
 
       <button type="submit" className="btn btn--primary btn--block" aria-disabled={submitting}>
         {submitting ? t('auth.signingIn') : t('auth.signIn')}
@@ -66,6 +76,8 @@ export default function LoginPage() {
 
       <p className="muted auth-card__footer">
         {t('auth.newPatient')} <Link to="/register">{t('auth.createAccountLink')}</Link>
+        <br />
+        <Link to="/contact">{t('contact.loginLink')}</Link>
       </p>
     </form>
   );

@@ -74,6 +74,41 @@ async function ensureOneSessionPerPatient(conn, database) {
   return merges.length;
 }
 
+async function columnExists(conn, database, table, column) {
+  const [rows] = await conn.query(
+    'SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1',
+    [database, table, column]
+  );
+  return rows.length > 0;
+}
+
+/** Adds a column if it is missing. `definition` is trusted SQL from this file. */
+async function ensureColumn(conn, database, table, column, definition) {
+  if (await columnExists(conn, database, table, column)) return false;
+  await conn.query(`ALTER TABLE \`${database}\`.\`${table}\` ADD COLUMN \`${column}\` ${definition}`);
+  return true;
+}
+
+/** Image attachments on chat messages (GP2 addition); see schema.sql. */
+async function ensureChatAttachmentColumns(conn, database) {
+  const columns = [
+    ['attachment_path', 'VARCHAR(64) NULL AFTER content'],
+    ['attachment_mime', 'VARCHAR(20) NULL AFTER attachment_path'],
+    ['attachment_size', 'INT UNSIGNED NULL AFTER attachment_mime'],
+    ['attachment_name', 'VARCHAR(120) NULL AFTER attachment_size'],
+  ];
+  const added = [];
+  for (const [column, definition] of columns) {
+    if (await ensureColumn(conn, database, 'chat_messages', column, definition)) added.push(column);
+  }
+  // Downloads look a message up by its file key.
+  if (!(await indexExists(conn, database, 'chat_messages', 'uq_chat_messages_attachment'))) {
+    await conn.query(`ALTER TABLE \`${database}\`.chat_messages ADD UNIQUE KEY uq_chat_messages_attachment (attachment_path)`);
+    added.push('uq_chat_messages_attachment');
+  }
+  return added;
+}
+
 /**
  * Runs every upgrade step in order. The database name comes from
  * configuration, not user input; it is back-quoted because identifiers cannot
@@ -82,6 +117,8 @@ async function ensureOneSessionPerPatient(conn, database) {
 async function runUpgrades(conn, database) {
   const merged = await ensureOneSessionPerPatient(conn, database);
   if (merged > 0) console.log(`Merged duplicate chat sessions for ${merged} patient(s).`);
+  const added = await ensureChatAttachmentColumns(conn, database);
+  if (added.length > 0) console.log(`Added chat_messages columns: ${added.join(', ')}.`);
 }
 
 module.exports = { runUpgrades, planSessionMerges };

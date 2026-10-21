@@ -15,5 +15,9 @@ router.post('/sessions', requireRole(ROLES.PATIENT), chatController.openSession)
 router.get('/sessions', requireRole(ROLES.STAFF), chatController.listSessions);
 router.get('/sessions/:id/messages', chatController.listMessages);
 router.post('/sessions/:id/messages', chatController.sendMessage);
+// Images (GP2 addition): uploaded over HTTP, downloaded only through this
+// authenticated route - the uploads folder is never served statically.
+router.post('/sessions/:id/attachments', chatController.sendImage);
+router.get('/attachments/:key', chatController.getAttachment);
 
 module.exports = router;

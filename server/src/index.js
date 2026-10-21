@@ -7,6 +7,9 @@ const app = require('./app');
 const env = require('./config/env');
 const { attachChatHub } = require('./ws/chatHub');
 const { scheduleForecastJob } = require('./jobs/forecastJob');
+const { ensureUploadsDir } = require('./utils/uploadStore');
+
+ensureUploadsDir();
 
 const server = http.createServer(app);
 attachChatHub(server);

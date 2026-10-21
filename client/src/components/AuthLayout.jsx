@@ -1,4 +1,4 @@
-import { Outlet } from 'react-router-dom';
+import { Link, Outlet } from 'react-router-dom';
 import { useI18n } from '../i18n/I18nContext';
 import LanguageToggle from './LanguageToggle';
 import ThemeToggle from './ThemeToggle';
@@ -17,6 +17,9 @@ export default function AuthLayout() {
         {t('app.skipToContent')}
       </a>
       <div className="auth-bar">
+        <Link to="/contact" className="btn btn--ghost btn--sm">
+          {t('nav.contact')}
+        </Link>
         <LanguageToggle />
         <ThemeToggle />
       </div>
