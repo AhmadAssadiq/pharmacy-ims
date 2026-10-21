@@ -732,8 +732,8 @@ input[aria-invalid='true'], select[aria-invalid='true'] { border-color: var(--ne
 .table .actions { text-align: right; white-space: nowrap; }
 
 /* A flagged row is marked by a 3px ink edge, not by a colour wash. */
-.table tr.is-flagged td:first-child { box-shadow: inset 3px 0 0 var(--warning); }
-.table tr.is-expired td:first-child { box-shadow: inset 3px 0 0 var(--negative); }
+.table tr.is-flagged > :first-child { box-shadow: inset 3px 0 0 var(--warning); }
+.table tr.is-expired > :first-child { box-shadow: inset 3px 0 0 var(--negative); }
 
 .table tbody tr:hover td { background: var(--row-hover); }
 
