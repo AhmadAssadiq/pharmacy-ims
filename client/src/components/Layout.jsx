@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { ROLES } from '../utils/routes';
+import Clock from './Clock';
 
 const STAFF_LINKS = [
   { to: '/staff/inventory', label: 'Inventory' },
@@ -56,6 +57,7 @@ export default function Layout() {
           ))}
         </nav>
         <div className="topbar__user">
+          <Clock locale="en-GB" />
           <span className="topbar__who">
             <span>{user.name}</span>
             <span className="topbar__role">{isStaff ? 'Staff' : 'Patient'}</span>

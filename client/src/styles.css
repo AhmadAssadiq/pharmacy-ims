@@ -203,10 +203,24 @@ a:hover { color: #000; }
 }
 
 .topbar__who { display: flex; flex-direction: column; line-height: 1.25; }
+
+/* Same two-line shape as the user block beside it: time over date. */
+.topbar__clock {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.25;
+  padding-inline-end: 10px;
+  border-inline-end: 1px solid var(--border);
+  white-space: nowrap;
+}
+.topbar__time { font-weight: 500; }
+.topbar__date { font-size: var(--fs-small); color: var(--muted); }
 .topbar__role { font-size: var(--fs-small); color: var(--muted); }
 
 @media (max-width: 720px) {
   .topbar__who { display: none; }
+  .topbar__date { display: none; }
   .topbar__nav { order: 3; width: 100%; }
 }
 
