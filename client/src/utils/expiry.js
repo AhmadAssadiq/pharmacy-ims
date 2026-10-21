@@ -1,6 +1,7 @@
 import constants from '../../../shared/constants.json';
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 /** Whole days from today until `dateStr` (negative once it has passed). */
 export function daysUntil(dateStr) {
@@ -17,6 +18,19 @@ export function expiryStatus(dateStr) {
   return { days, label: 'OK', modifier: 'success' };
 }
 
+/**
+ * Dates read as "09 Nov 2026", never as a bare ISO string.
+ *
+ * A pharmacist reads expiry off a box as a month name, and 2026-11-09 against
+ * 2026-11-19 differ by one glyph in the middle of a run of digits. Spelling the
+ * month removes that whole class of misread, and the fixed-width day and year
+ * still line up down the column.
+ */
 export function formatDate(value) {
-  return value ? String(value).slice(0, 10) : '—';
+  if (!value) return '—';
+  const iso = String(value).slice(0, 10);
+  const [year, month, day] = iso.split('-');
+  const name = MONTHS[Number(month) - 1];
+  if (!name || !day || !year) return iso;
+  return `${day} ${name} ${year}`;
 }

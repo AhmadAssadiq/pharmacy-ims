@@ -15,11 +15,22 @@ const PATIENT_LINKS = [
   { to: '/patient/chat', label: 'Chat with pharmacy' },
 ];
 
+/** The product's mark: a dispensing cross, drawn rather than imported. */
+function Mark() {
+  return (
+    <svg className="topbar__mark" width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+      <rect width="18" height="18" rx="4" fill="#141414" />
+      <path d="M6 9h6M9 6v6" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 /** Page frame with the role-specific navigation bar. */
 export default function Layout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const links = user.role === ROLES.STAFF ? STAFF_LINKS : PATIENT_LINKS;
+  const isStaff = user.role === ROLES.STAFF;
+  const links = isStaff ? STAFF_LINKS : PATIENT_LINKS;
 
   const handleLogout = () => {
     logout();
@@ -28,8 +39,15 @@ export default function Layout() {
 
   return (
     <div className="app-shell">
+      <a className="skip-link" href="#main">
+        Skip to content
+      </a>
       <header className="topbar">
-        <div className="topbar__brand">Pharmacy IMS</div>
+        <span className="topbar__brand">
+          <Mark />
+          Pharmacy IMS
+          <span className="topbar__scope">{isStaff ? 'Dispensary' : 'Patient portal'}</span>
+        </span>
         <nav className="topbar__nav" aria-label="Main navigation">
           {links.map((link) => (
             <NavLink key={link.to} to={link.to} className="topbar__link">
@@ -38,15 +56,16 @@ export default function Layout() {
           ))}
         </nav>
         <div className="topbar__user">
-          <span className="topbar__name">
-            {user.name} <span className="badge badge--role">{user.role}</span>
+          <span className="topbar__who">
+            <span>{user.name}</span>
+            <span className="topbar__role">{isStaff ? 'Staff' : 'Patient'}</span>
           </span>
-          <button type="button" className="btn btn--ghost" onClick={handleLogout}>
+          <button type="button" className="btn btn--sm" onClick={handleLogout}>
             Log out
           </button>
         </div>
       </header>
-      <main className="page">
+      <main className="page" id="main">
         <Outlet />
       </main>
     </div>

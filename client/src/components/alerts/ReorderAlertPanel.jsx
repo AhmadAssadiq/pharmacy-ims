@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { dismissAlert, fetchAlerts } from '../../api/alerts';
+import { formatDate } from '../../utils/expiry';
 
 const REFRESH_INTERVAL_MS = 60_000;
 
 /**
- * ML alert panel on the staff dashboard (FR 6.2, UC-3). Shows every active
- * reorder alert written by the background forecast job, with the medication
- * name and the predicted days until it drops below the safe threshold.
+ * ML alert panel on the staff inventory screen (FR 6.2, UC-3).
+ *
+ * Every alert leads with the action it wants — receive stock — rather than
+ * with the only thing that used to be on offer, which was making the warning
+ * go away. Dismiss is demoted to a ghost button.
  */
 export default function ReorderAlertPanel() {
   const [alerts, setAlerts] = useState([]);
@@ -41,37 +45,73 @@ export default function ReorderAlertPanel() {
   };
 
   return (
-    <section className="card" aria-label="Reorder alerts">
-      <div className="page-header" style={{ marginBottom: '0.5rem' }}>
-        <h2>Reorder alerts</h2>
-        <span className="status-line">Forecast: medications predicted to fall below the safe threshold within 7 days</span>
+    <section className="card" aria-labelledby="reorder-alerts-heading">
+      <div className="card__header">
+        <h2 id="reorder-alerts-heading">Reorder alerts</h2>
+        <span className="card__note">
+          Forecast from this pharmacy&apos;s own sales. Predicted to fall below its reorder level
+          within 7 days.
+        </span>
       </div>
 
-      {error && <div className="alert alert--error" role="alert">{error}</div>}
-      {loading && <p className="muted">Loading alerts...</p>}
-      {!loading && alerts.length === 0 && <p className="empty">No reorder alerts. Stock levels look fine for the next 7 days.</p>}
+      {error && (
+        <div className="alert alert--error" role="alert">
+          Couldn&apos;t load reorder alerts. {error}{' '}
+          <button type="button" className="btn btn--sm btn--ghost" onClick={load}>
+            Retry
+          </button>
+        </div>
+      )}
+
+      {loading && <p className="empty">Loading alerts...</p>}
+
+      {!loading && !error && alerts.length === 0 && (
+        <p className="empty empty--framed">
+          No reorder alerts. Nothing is forecast to fall below its reorder level in the next 7 days.
+        </p>
+      )}
 
       <ul className="list">
-        {alerts.map((alert) => (
-          <li key={alert.id} className="list__item">
-            <span>
-              <strong>{alert.medication_name}</strong>{' '}
-              <span className={`badge ${alert.days_until_threshold <= 2 ? 'badge--danger' : 'badge--warning'}`}>
-                {alert.days_until_threshold === 0
-                  ? 'Below threshold now'
-                  : `Below threshold in ${alert.days_until_threshold} day${alert.days_until_threshold === 1 ? '' : 's'}`}
+        {alerts.map((alert) => {
+          const now = alert.days_until_threshold === 0;
+          return (
+            <li key={alert.id} className={`alert-row ${now ? 'alert-row--now' : ''}`}>
+              <span className="alert-row__days" aria-hidden="true">
+                <span className="alert-row__num">{alert.days_until_threshold}</span>
+                <span className="alert-row__unit">
+                  {alert.days_until_threshold === 1 ? 'day' : 'days'}
+                </span>
               </span>
-              <br />
-              <span className="muted" style={{ fontSize: '0.85rem' }}>
-                Predicted date {String(alert.predicted_date).slice(0, 10)} · current stock{' '}
-                {alert.current_quantity} · reorder at {alert.low_stock_threshold}
+              <span className="alert-row__body">
+                <span className="alert-row__name">{alert.medication_name}</span>
+                <span className="alert-row__meta">
+                  {now
+                    ? 'Already below its reorder level'
+                    : `Falls below its reorder level on ${formatDate(alert.predicted_date)}`}
+                  {' · '}
+                  <span className="num">{alert.current_quantity}</span> in stock, reorder at{' '}
+                  <span className="num">{alert.low_stock_threshold}</span>
+                </span>
               </span>
-            </span>
-            <button type="button" className="btn btn--sm" onClick={() => handleDismiss(alert)}>
-              Dismiss
-            </button>
-          </li>
-        ))}
+              <span className="alert-row__actions">
+                <Link
+                  to={`/staff/stock?medication=${alert.medication_id}`}
+                  className="btn btn--sm"
+                >
+                  Receive stock
+                </Link>
+                <button
+                  type="button"
+                  className="btn btn--sm btn--ghost"
+                  onClick={() => handleDismiss(alert)}
+                  aria-label={`Dismiss the reorder alert for ${alert.medication_name}`}
+                >
+                  Dismiss
+                </button>
+              </span>
+            </li>
+          );
+        })}
       </ul>
     </section>
   );

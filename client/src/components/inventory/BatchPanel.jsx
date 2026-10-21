@@ -94,7 +94,7 @@ export default function BatchPanel({ medication, onChanged }) {
     </label>
   );
 
-  if (loading) return <p className="muted">Loading stock lots...</p>;
+  if (loading) return <p className="empty">Loading stock lots...</p>;
 
   return (
     <div className="batch-panel">
@@ -105,14 +105,17 @@ export default function BatchPanel({ medication, onChanged }) {
         <p className="empty">No stock lots. Add one below to put this medication back in stock.</p>
       ) : (
         <table className="table table--compact">
+          <caption className="sr-only">
+            Stock lots for {medication.name}, each with its own expiry date.
+          </caption>
           <thead>
             <tr>
-              <th>Expiry date</th>
-              <th>Quantity</th>
-              <th>Lot number</th>
-              <th>Received</th>
-              <th>Status</th>
-              <th>Actions</th>
+              <th scope="col">Expiry date</th>
+              <th scope="col" className="num">Quantity</th>
+              <th scope="col">Lot number</th>
+              <th scope="col">Received</th>
+              <th scope="col">Status</th>
+              <th scope="col" className="actions">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -143,10 +146,10 @@ export default function BatchPanel({ medication, onChanged }) {
               }
               return (
                 <tr key={batch.id} className={status.modifier === 'danger' ? 'is-flagged' : undefined}>
-                  <td>{formatDate(batch.expiry_date)}</td>
-                  <td>{batch.quantity}</td>
+                  <td className="date">{formatDate(batch.expiry_date)}</td>
+                  <td className="num">{batch.quantity}</td>
                   <td>{batch.batch_number || '—'}</td>
-                  <td>{formatDate(batch.received_date)}</td>
+                  <td className="date">{formatDate(batch.received_date)}</td>
                   <td><span className={`badge badge--${status.modifier}`}>{status.label}</span></td>
                   <td className="actions">
                     <button type="button" className="btn btn--sm" onClick={() => startEdit(batch)}>Edit</button>{' '}
