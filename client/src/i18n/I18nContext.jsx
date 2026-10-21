@@ -1,4 +1,5 @@
-import { createContext, Fragment, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { I18nContext } from './context';
 import en from './en.json';
 import ar from './ar.json';
 import {
@@ -45,8 +46,6 @@ function loadArabicFont() {
 function keyed(result) {
   return Array.isArray(result) ? result.map((part, i) => <Fragment key={i}>{part}</Fragment>) : result;
 }
-
-const I18nContext = createContext(null);
 
 /**
  * Language, direction and locale formatting for the whole app (GP2 addition).
