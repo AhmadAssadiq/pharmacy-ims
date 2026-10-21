@@ -447,7 +447,8 @@ input[aria-invalid='true'], select[aria-invalid='true'] { border-color: var(--ne
 }
 
 .btn:hover { background: var(--raised); }
-.btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.btn:disabled,
+.btn[aria-disabled='true'] { opacity: 0.55; cursor: not-allowed; }
 
 .btn--primary {
   background: var(--accent);
