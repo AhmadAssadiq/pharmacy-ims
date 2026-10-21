@@ -12,7 +12,7 @@ const { signToken } = require('./tokenService');
 const { defaultTracker } = require('./loginAttemptService');
 const { validateRegister, validateLogin } = require('../validation/authValidation');
 const HttpError = require('../utils/httpError');
-const { ROLES } = require('../../../shared/constants.json');
+const { ROLES, ERROR_CODES } = require('../../../shared/constants.json');
 
 const BCRYPT_ROUNDS = 10;
 
@@ -22,10 +22,12 @@ function toPublicUser(user) {
 
 async function register(body, { tracker = defaultTracker } = {}) {
   const { valid, errors, value } = validateRegister(body);
-  if (!valid) throw new HttpError(400, 'Validation failed', errors);
+  if (!valid) throw new HttpError(400, 'Validation failed', errors, { code: ERROR_CODES.VALIDATION_FAILED });
 
   const existing = await userModel.findByEmail(value.email);
-  if (existing) throw new HttpError(409, 'An account with this email already exists');
+  if (existing) throw new HttpError(409, 'An account with this email already exists', undefined, {
+      code: ERROR_CODES.AUTH_EMAIL_TAKEN,
+    });
 
   const passwordHash = await bcrypt.hash(value.password, BCRYPT_ROUNDS);
   const user = await userModel.create({
@@ -41,12 +43,15 @@ async function register(body, { tracker = defaultTracker } = {}) {
 
 async function login(body, { tracker = defaultTracker } = {}) {
   const { valid, errors, value } = validateLogin(body);
-  if (!valid) throw new HttpError(400, 'Validation failed', errors);
+  if (!valid) throw new HttpError(400, 'Validation failed', errors, { code: ERROR_CODES.VALIDATION_FAILED });
 
   const lockedMs = tracker.lockedFor(value.email);
   if (lockedMs > 0) {
     const minutes = Math.ceil(lockedMs / 60000);
-    throw new HttpError(423, `Account temporarily locked. Try again in ${minutes} minute(s).`);
+    throw new HttpError(423, `Account temporarily locked. Try again in ${minutes} minute(s).`, undefined, {
+      code: ERROR_CODES.AUTH_LOCKED,
+      params: { count: minutes },
+    });
   }
 
   const user = await userModel.findByEmail(value.email);
@@ -55,9 +60,14 @@ async function login(body, { tracker = defaultTracker } = {}) {
   if (!user || !passwordMatches) {
     const { locked, remainingAttempts } = tracker.recordFailure(value.email);
     if (locked) {
-      throw new HttpError(423, 'Too many failed attempts. Account temporarily locked.');
+      throw new HttpError(423, 'Too many failed attempts. Account temporarily locked.', undefined, {
+        code: ERROR_CODES.AUTH_TOO_MANY_ATTEMPTS,
+      });
     }
-    throw new HttpError(401, `Invalid email or password. ${remainingAttempts} attempt(s) remaining.`);
+    throw new HttpError(401, `Invalid email or password. ${remainingAttempts} attempt(s) remaining.`, undefined, {
+      code: ERROR_CODES.AUTH_INVALID_CREDENTIALS,
+      params: { count: remainingAttempts },
+    });
   }
 
   tracker.reset(value.email);

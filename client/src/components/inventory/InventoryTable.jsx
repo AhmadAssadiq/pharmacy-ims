@@ -1,7 +1,7 @@
 import { Fragment, useMemo, useState } from 'react';
 import BatchPanel from './BatchPanel';
-import { formatDate } from '../../utils/expiry';
 import StatusMark, { medicationStatuses } from '../StatusMark';
+import { useI18n } from '../../i18n/I18nContext';
 
 /* The runway's window: how far ahead the expiry track reaches. */
 const RUNWAY_DAYS = 180;
@@ -11,10 +11,12 @@ const RUNWAY_DAYS = 180;
  *
  * Every row's next-expiry sits on one shared 0-180 day axis, so scanning the
  * column tells you the order your shelves expire in, not just a set of dates
- * you would otherwise have to subtract in your head.
+ * you would otherwise have to subtract in your head. It fills from the start
+ * edge, so it mirrors with the rest of the row in Arabic.
  */
-function ExpiryRunway({ days, expiredQuantity }) {
-  if (days == null) return <span className="runway__none">No stock</span>;
+function ExpiryRunway({ days }) {
+  const { t } = useI18n();
+  if (days == null) return <span className="runway__none">{t('table.noStock')}</span>;
 
   const clamped = Math.max(0, Math.min(days, RUNWAY_DAYS));
   const width = days < 0 ? 100 : (clamped / RUNWAY_DAYS) * 100;
@@ -33,15 +35,15 @@ function ExpiryRunway({ days, expiredQuantity }) {
 }
 
 const COLUMNS = [
-  { key: 'name', label: 'Medication', sortable: true },
-  { key: 'category', label: 'Category', sortable: true },
-  { key: 'quantity', label: 'In stock', sortable: true, num: true },
-  { key: 'low_stock_threshold', label: 'Reorder at', sortable: true, num: true },
-  { key: 'unit_price', label: 'Unit price', sortable: true, num: true },
-  { key: 'expiry', label: 'Next expiry', sortable: true },
-  { key: 'supplier_info', label: 'Supplier', sortable: true },
-  { key: 'status', label: 'Status', sortable: false },
-  { key: 'actions', label: 'Actions', sortable: false },
+  { key: 'name', label: 'common.medication', sortable: true },
+  { key: 'category', label: 'table.colCategory', sortable: true },
+  { key: 'quantity', label: 'common.inStock', sortable: true, num: true },
+  { key: 'low_stock_threshold', label: 'common.reorderAt', sortable: true, num: true },
+  { key: 'unit_price', label: 'table.colPrice', sortable: true, num: true },
+  { key: 'expiry', label: 'common.nextExpiry', sortable: true },
+  { key: 'supplier_info', label: 'table.colSupplier', sortable: true },
+  { key: 'status', label: 'common.status', sortable: false },
+  { key: 'actions', label: 'common.actions', sortable: false },
 ];
 
 function compare(a, b, key) {
@@ -76,7 +78,8 @@ function SortIcon({ direction }) {
  * and expiry flags (FR 4). Stock itself is managed per lot in the expandable
  * batch panel.
  */
-export default function InventoryTable({ medications, onEdit, onDelete, onBatchesChanged, onReceive }) {
+export default function InventoryTable({ medications, onEdit, onDelete, onBatchesChanged }) {
+  const { t, formatDate, formatPrice } = useI18n();
   const [expandedId, setExpandedId] = useState(null);
   const [sort, setSort] = useState({ key: 'name', direction: 'ascending' });
 
@@ -89,24 +92,17 @@ export default function InventoryTable({ medications, onEdit, onDelete, onBatche
     setSort((prev) =>
       prev.key === key
         ? { key, direction: prev.direction === 'ascending' ? 'descending' : 'ascending' }
-        : { key, direction: key === 'expiry' || key === 'quantity' ? 'ascending' : 'ascending' }
+        : { key, direction: 'ascending' }
     );
 
   if (medications.length === 0) {
-    return <p className="empty empty--framed">No medications match these filters.</p>;
+    return <p className="empty empty--framed">{t('table.noMatch')}</p>;
   }
 
   return (
-    <div
-      className="table-wrap"
-      tabIndex={0}
-      role="region"
-      aria-label="Medication stock, scrollable"
-    >
+    <div className="table-wrap" tabIndex={0} role="region" aria-label={t('table.regionLabel')}>
       <table className="table">
-        <caption className="sr-only">
-          Medications with stock on hand, reorder level, next expiry date and status.
-        </caption>
+        <caption className="sr-only">{t('table.caption')}</caption>
         <thead>
           <tr>
             {COLUMNS.map((col) => {
@@ -126,11 +122,11 @@ export default function InventoryTable({ medications, onEdit, onDelete, onBatche
                       data-active={active}
                       onClick={() => toggleSort(col.key)}
                     >
-                      {col.label}
+                      {t(col.label)}
                       <SortIcon direction={active ? sort.direction : 'ascending'} />
                     </button>
                   ) : (
-                    col.label
+                    t(col.label)
                   )}
                 </th>
               );
@@ -147,28 +143,32 @@ export default function InventoryTable({ medications, onEdit, onDelete, onBatche
               <Fragment key={med.id}>
                 <tr className={rowClass}>
                   <th scope="row" data-col="name" style={{ fontWeight: 400 }}>
-                    <span className="med-name">{med.name}</span>
+                    {/* <bdi>: stored names and suppliers are mostly Latin; isolating them
+                        keeps "Hikma - +962 6 580 2900" in order inside an Arabic row. */}
+                    <span className="med-name"><bdi>{med.name}</bdi></span>
                     {/* At tablet width category and supplier fold into this subline. */}
                     <span className="med-sub med-sub--fold">
-                      {med.category} · {med.supplier_info}
+                      <bdi>{med.category}</bdi> · <bdi>{med.supplier_info}</bdi>
                     </span>
                   </th>
-                  <td data-col="category">{med.category}</td>
+                  <td data-col="category"><bdi>{med.category}</bdi></td>
                   <td className="num" data-col="quantity">
                     {med.quantity}
-                    {expired && <span className="med-sub">+{med.expired_quantity} expired</span>}
+                    {expired && (
+                      <span className="med-sub">{t('table.expiredExtra', { count: med.expired_quantity })}</span>
+                    )}
                   </td>
                   <td className="num" data-col="low_stock_threshold">{med.low_stock_threshold}</td>
-                  <td className="num" data-col="unit_price">{Number(med.unit_price).toFixed(2)}</td>
+                  <td className="num" data-col="unit_price">{formatPrice(med.unit_price)}</td>
                   <td data-col="expiry">
                     <span className="date">{formatDate(med.expiry_date)}</span>
                     <ExpiryRunway days={med.days_until_expiry} />
                   </td>
-                  <td data-col="supplier_info">{med.supplier_info}</td>
+                  <td data-col="supplier_info"><bdi>{med.supplier_info}</bdi></td>
                   <td data-col="status">
                     <span className="badges">
-                      {medicationStatuses(med).map((mark) => (
-                        <StatusMark key={mark.label} kind={mark.kind} label={mark.label} />
+                      {medicationStatuses(med, t).map((mark) => (
+                        <StatusMark key={mark.kind} kind={mark.kind} label={mark.label} />
                       ))}
                     </span>
                   </td>
@@ -179,17 +179,17 @@ export default function InventoryTable({ medications, onEdit, onDelete, onBatche
                       aria-expanded={expanded}
                       onClick={() => setExpandedId(expanded ? null : med.id)}
                     >
-                      {expanded ? 'Hide lots' : 'Lots'}
+                      {expanded ? t('table.hideLots') : t('table.lots')}
                     </button>{' '}
                     <button type="button" className="btn btn--sm" onClick={() => onEdit(med)}>
-                      Edit
+                      {t('common.edit')}
                     </button>{' '}
                     <button
                       type="button"
                       className="btn btn--sm btn--danger"
                       onClick={() => onDelete(med)}
                     >
-                      Delete
+                      {t('common.delete')}
                     </button>
                   </td>
                 </tr>

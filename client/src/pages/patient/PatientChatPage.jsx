@@ -3,6 +3,7 @@ import { fetchMessages, openMySession, postMessage } from '../../api/chat';
 import ChatWindow from '../../components/chat/ChatWindow';
 import { useAuth } from '../../context/AuthContext';
 import useChatSocket from '../../hooks/useChatSocket';
+import { useI18n } from '../../i18n/I18nContext';
 
 /**
  * Patient chat with the pharmacy (FR 5, UC-2). The patient's single session
@@ -10,6 +11,7 @@ import useChatSocket from '../../hooks/useChatSocket';
  */
 export default function PatientChatPage() {
   const { user } = useAuth();
+  const { t } = useI18n();
   const [session, setSession] = useState(null);
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -25,7 +27,7 @@ export default function PatientChatPage() {
         setSession(opened);
         setMessages(history);
       } catch (err) {
-        if (!cancelled) setError(err.message);
+        if (!cancelled) setError(err);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -57,11 +59,11 @@ export default function PatientChatPage() {
   return (
     <>
       <div className="page-header">
-        <h1>Chat with pharmacy</h1>
+        <h1>{t('chat.patientTitle')}</h1>
       </div>
       <ChatWindow
-        title="Pharmacy staff"
-        subtitle={session?.staff_id ? 'A pharmacist has joined' : 'Waiting for a pharmacist'}
+        title={t('chat.staffWindowTitle')}
+        subtitle={session?.staff_id ? t('chat.pharmacistJoined') : t('chat.waitingForPharmacist')}
         messages={messages}
         currentUserId={user.id}
         onSend={handleSend}

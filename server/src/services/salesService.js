@@ -18,6 +18,7 @@ const salesHistoryModel = require('../models/salesHistoryModel');
 const { validateSale, validateSaleItem } = require('../validation/salesValidation');
 const fefo = require('../utils/fefo');
 const HttpError = require('../utils/httpError');
+const { ERROR_CODES } = require('../../../shared/constants.json');
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -25,14 +26,20 @@ function today() {
 
 async function dispenseLine(item, date, conn) {
   const medication = await medicationModel.findById(item.medication_id, conn);
-  if (!medication) throw new HttpError(404, `Medication ${item.medication_id} not found`);
+  if (!medication) throw new HttpError(404, `Medication ${item.medication_id} not found`, undefined, {
+      code: ERROR_CODES.MEDICATION_NOT_FOUND,
+    });
 
   const batches = await medicationBatchModel.findInStockForUpdate(item.medication_id, conn);
   const { allocations, shortfall } = fefo.allocate(batches, item.quantity);
   if (shortfall > 0) {
-    throw new HttpError(400, `Not enough sellable stock for ${medication.name}`, {
-      items: `Only ${fefo.sellableQuantity(batches)} unit(s) of ${medication.name} available to dispense`,
-    });
+    const available = fefo.sellableQuantity(batches);
+    throw new HttpError(
+      400,
+      `Not enough sellable stock for ${medication.name}`,
+      { items: `Only ${available} unit(s) of ${medication.name} available to dispense` },
+      { code: ERROR_CODES.STOCK_INSUFFICIENT, params: { name: medication.name, count: available } }
+    );
   }
 
   for (const line of allocations) {
@@ -56,7 +63,7 @@ async function dispenseLine(item, date, conn) {
 
 async function recordSale(body) {
   const { valid, errors, value } = validateSale(body);
-  if (!valid) throw new HttpError(400, 'Validation failed', errors);
+  if (!valid) throw new HttpError(400, 'Validation failed', errors, { code: ERROR_CODES.VALIDATION_FAILED });
 
   const date = today();
   const conn = await pool.getConnection();
@@ -87,7 +94,7 @@ async function recordSale(body) {
 /** Which lots a single basket line would draw from, without recording anything. */
 async function previewSale(body) {
   const { valid, errors, value } = validateSaleItem(body);
-  if (!valid) throw new HttpError(400, 'Validation failed', errors);
+  if (!valid) throw new HttpError(400, 'Validation failed', errors, { code: ERROR_CODES.VALIDATION_FAILED });
 
   const batches = await medicationBatchModel.findByMedicationId(value.medication_id);
   const { allocations, shortfall } = fefo.allocate(batches, value.quantity);

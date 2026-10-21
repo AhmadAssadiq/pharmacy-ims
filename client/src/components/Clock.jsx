@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useI18n } from '../i18n/I18nContext';
 
 const MS_PER_MINUTE = 60 * 1000;
 
@@ -21,7 +22,8 @@ function toDateTimeAttr(date) {
  * skips the 59 ticks that change nothing and re-renders this component alone,
  * never the page under it. No aria-live: screen readers read it on demand.
  */
-export default function Clock({ locale }) {
+export default function Clock() {
+  const { locale } = useI18n();
   const [minute, setMinute] = useState(currentMinute);
 
   useEffect(() => {

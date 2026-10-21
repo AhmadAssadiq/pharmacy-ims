@@ -57,18 +57,19 @@ export default function StatusMark({ kind, label }) {
 /**
  * Every status a medication row can be in, worst first. A row can be in more
  * than one (out of stock AND holding expired lots), so this returns a list.
+ * `t` is useI18n().t, so the labels come out in the active language.
  */
-export function medicationStatuses(med) {
+export function medicationStatuses(med, t) {
   const marks = [];
-  if (med.is_out_of_stock) marks.push({ kind: 'out', label: 'Out of stock' });
-  else if (med.is_low_stock) marks.push({ kind: 'low', label: 'Low stock' });
+  if (med.is_out_of_stock) marks.push({ kind: 'out', label: t('status.out') });
+  else if (med.is_low_stock) marks.push({ kind: 'low', label: t('status.low') });
 
   if (med.expired_quantity > 0) {
-    marks.push({ kind: 'expired', label: `${med.expired_quantity} expired` });
+    marks.push({ kind: 'expired', label: t('status.expiredUnits', { count: med.expired_quantity }) });
   }
   if (!med.is_out_of_stock && med.is_near_expiry && med.days_until_expiry != null) {
-    marks.push({ kind: 'clock', label: `Expires in ${med.days_until_expiry} d` });
+    marks.push({ kind: 'clock', label: t('status.expiresIn', { count: med.days_until_expiry }) });
   }
-  if (marks.length === 0) marks.push({ kind: 'ok', label: 'OK' });
+  if (marks.length === 0) marks.push({ kind: 'ok', label: t('status.ok') });
   return marks;
 }

@@ -14,7 +14,7 @@ const medicationModel = require('../models/medicationModel');
 const salesHistoryModel = require('../models/salesHistoryModel');
 const reorderAlertModel = require('../models/reorderAlertModel');
 const HttpError = require('../utils/httpError');
-const { FORECAST_HORIZON_DAYS } = require('../../../shared/constants.json');
+const { FORECAST_HORIZON_DAYS, ERROR_CODES } = require('../../../shared/constants.json');
 
 async function callMl(path, body) {
   const response = await fetch(`${env.mlServiceUrl}${path}`, {
@@ -132,7 +132,7 @@ function addDays(date, days) {
  */
 async function getMedicationForecast(medicationId) {
   const medication = await medicationModel.findById(medicationId);
-  if (!medication) throw new HttpError(404, 'Medication not found');
+  if (!medication) throw new HttpError(404, 'Medication not found', undefined, { code: ERROR_CODES.MEDICATION_NOT_FOUND });
 
   const history = aggregateByDay(await salesHistoryModel.findByMedicationId(medicationId));
   const asOfDate = new Date().toISOString().slice(0, 10);
@@ -193,7 +193,7 @@ async function listActiveAlerts() {
 
 async function dismissAlert(id) {
   const dismissed = await reorderAlertModel.dismiss(id);
-  if (!dismissed) throw new HttpError(404, 'Active alert not found');
+  if (!dismissed) throw new HttpError(404, 'Active alert not found', undefined, { code: ERROR_CODES.ALERT_NOT_FOUND });
   return reorderAlertModel.findById(id);
 }
 

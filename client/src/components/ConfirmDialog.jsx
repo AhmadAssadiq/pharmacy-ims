@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { useI18n } from '../i18n/I18nContext';
 
 const FOCUSABLE =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -16,12 +17,13 @@ export default function ConfirmDialog({
   title,
   lead,
   confirmLabel,
-  cancelLabel = 'Cancel',
+  cancelLabel,
   busy = false,
   onConfirm,
   onCancel,
   children,
 }) {
+  const { t } = useI18n();
   const dialogRef = useRef(null);
   const cancelRef = useRef(null);
   const openerRef = useRef(null);
@@ -83,10 +85,10 @@ export default function ConfirmDialog({
         {children}
         <div className="modal__actions">
           <button type="button" className="btn" onClick={onCancel} disabled={busy} ref={cancelRef}>
-            {cancelLabel}
+            {cancelLabel ?? t('common.cancel')}
           </button>
           <button type="button" className="btn btn--commit" onClick={onConfirm} disabled={busy}>
-            {busy ? 'Working...' : confirmLabel}
+            {busy ? t('common.working') : confirmLabel}
           </button>
         </div>
       </div>

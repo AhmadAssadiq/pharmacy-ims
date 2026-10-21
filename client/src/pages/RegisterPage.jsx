@@ -1,10 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useI18n } from '../i18n/I18nContext';
 import { homePathForRole } from '../utils/routes';
+import constants from '../../../shared/constants.json';
+
+const { PASSWORD_MIN_LENGTH } = constants;
 
 export default function RegisterPage() {
   const { user, register } = useAuth();
+  const { t, te } = useI18n();
   const navigate = useNavigate();
   const [form, setForm] = useState({ name: '', email: '', password: '' });
   const [error, setError] = useState(null);
@@ -33,7 +38,7 @@ export default function RegisterPage() {
       const created = await register(form);
       navigate(homePathForRole(created.role), { replace: true });
     } catch (err) {
-      setError(err.message);
+      setError(te(err));
       setFieldErrors(err.details || {});
     } finally {
       setSubmitting(false);
@@ -42,8 +47,8 @@ export default function RegisterPage() {
 
   return (
     <form className="card auth-card" onSubmit={handleSubmit}>
-      <h1 className="auth-card__title">Create patient account</h1>
-      <p className="muted">Check medication availability and chat with the pharmacy.</p>
+      <h1 className="auth-card__title">{t('auth.registerTitle')}</h1>
+      <p className="muted">{t('auth.registerSubtitle')}</p>
 
       {error && (
         <div className="alert alert--error" role="alert" tabIndex={-1} ref={errorRef}>
@@ -52,27 +57,27 @@ export default function RegisterPage() {
       )}
 
       <label className="field">
-        <span className="field__label">Full name</span>
+        <span className="field__label">{t('auth.fullName')}</span>
         <input name="name" value={form.name} onChange={handleChange} required autoComplete="name" />
         {fieldErrors.name && <span className="field__error">{fieldErrors.name}</span>}
       </label>
       <label className="field">
-        <span className="field__label">Email</span>
-        <input name="email" type="email" value={form.email} onChange={handleChange} required autoComplete="email" />
+        <span className="field__label">{t('auth.email')}</span>
+        <input name="email" type="email" dir="ltr" value={form.email} onChange={handleChange} required autoComplete="email" />
         {fieldErrors.email && <span className="field__error">{fieldErrors.email}</span>}
       </label>
       <label className="field">
-        <span className="field__label">Password (at least 8 characters)</span>
-        <input name="password" type="password" value={form.password} onChange={handleChange} required minLength={8} autoComplete="new-password" />
+        <span className="field__label">{t('auth.passwordHint', { count: PASSWORD_MIN_LENGTH })}</span>
+        <input name="password" type="password" value={form.password} onChange={handleChange} required minLength={PASSWORD_MIN_LENGTH} autoComplete="new-password" />
         {fieldErrors.password && <span className="field__error">{fieldErrors.password}</span>}
       </label>
 
       <button type="submit" className="btn btn--primary btn--block" aria-disabled={submitting}>
-        {submitting ? 'Creating account...' : 'Create account'}
+        {submitting ? t('auth.creatingAccount') : t('auth.createAccount')}
       </button>
 
       <p className="muted auth-card__footer">
-        Already registered? <Link to="/login">Sign in</Link>
+        {t('auth.alreadyRegistered')} <Link to="/login">{t('auth.signInLink')}</Link>
       </p>
     </form>
   );

@@ -9,7 +9,7 @@ const chatMessageModel = require('../models/chatMessageModel');
 const userModel = require('../models/userModel');
 const { validateMessageContent } = require('../validation/chatValidation');
 const HttpError = require('../utils/httpError');
-const { ROLES } = require('../../../shared/constants.json');
+const { ROLES, ERROR_CODES } = require('../../../shared/constants.json');
 
 /**
  * Patients have a single session with the pharmacy; it is created on first use.
@@ -30,9 +30,11 @@ async function listSessions() {
 /** Loads a session and verifies that `user` may take part in it. */
 async function getAccessibleSession(sessionId, user) {
   const session = await chatSessionModel.findById(sessionId);
-  if (!session) throw new HttpError(404, 'Chat session not found');
+  if (!session) throw new HttpError(404, 'Chat session not found', undefined, { code: ERROR_CODES.CHAT_SESSION_NOT_FOUND });
   if (user.role !== ROLES.STAFF && session.patient_id !== user.id) {
-    throw new HttpError(403, 'You do not have access to this chat session');
+    throw new HttpError(403, 'You do not have access to this chat session', undefined, {
+      code: ERROR_CODES.CHAT_FORBIDDEN,
+    });
   }
   return session;
 }
@@ -48,7 +50,7 @@ async function getMessages(sessionId, user) {
  */
 async function sendMessage({ sessionId, sender, content }) {
   const check = validateMessageContent(content);
-  if (!check.valid) throw new HttpError(400, check.error);
+  if (!check.valid) throw new HttpError(400, check.error, undefined, { code: check.code, params: check.params });
 
   let session = await getAccessibleSession(sessionId, sender);
 

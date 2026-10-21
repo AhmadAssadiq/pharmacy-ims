@@ -4,12 +4,15 @@
  *   router.get('/staff-only', authenticate, requireRole('staff'), handler)
  */
 const HttpError = require('../utils/httpError');
+const { ERROR_CODES } = require('../../../shared/constants.json');
 
 function requireRole(...allowedRoles) {
   return (req, res, next) => {
-    if (!req.user) return next(new HttpError(401, 'Authentication required'));
+    if (!req.user) return next(new HttpError(401, 'Authentication required', undefined, { code: ERROR_CODES.AUTH_REQUIRED }));
     if (!allowedRoles.includes(req.user.role)) {
-      return next(new HttpError(403, 'You do not have permission to access this resource'));
+      return next(new HttpError(403, 'You do not have permission to access this resource', undefined, {
+        code: ERROR_CODES.FORBIDDEN,
+      }));
     }
     return next();
   };

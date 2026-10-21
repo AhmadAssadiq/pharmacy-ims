@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { createBatch, deleteBatch, fetchBatches, updateBatch } from '../../api/medications';
-import { expiryStatus, formatDate } from '../../utils/expiry';
+import { expiryStatus } from '../../utils/expiry';
+import { useI18n } from '../../i18n/I18nContext';
 
 const EMPTY = { quantity: '', expiry_date: '', batch_number: '' };
 
@@ -18,6 +19,7 @@ function toForm(batch) {
  * own expiry date; dispensing always draws from the lot expiring soonest.
  */
 export default function BatchPanel({ medication, onChanged }) {
+  const { t, te, formatDate } = useI18n();
   const [batches, setBatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -33,7 +35,7 @@ export default function BatchPanel({ medication, onChanged }) {
       setBatches(data.batches);
       setError(null);
     } catch (err) {
-      setError(err.message);
+      setError(err);
     } finally {
       setLoading(false);
     }
@@ -53,7 +55,7 @@ export default function BatchPanel({ medication, onChanged }) {
       onChanged?.();
       return true;
     } catch (err) {
-      setError(err.message);
+      setError(err);
       setFieldErrors(err.details || {});
       return false;
     } finally {
@@ -72,7 +74,8 @@ export default function BatchPanel({ medication, onChanged }) {
   };
 
   const handleDelete = async (batch) => {
-    if (!window.confirm(`Remove the lot of ${batch.quantity} expiring ${formatDate(batch.expiry_date)}?`)) return;
+    const message = t('batch.confirmRemove', { quantity: batch.quantity, date: formatDate(batch.expiry_date) });
+    if (!window.confirm(message)) return;
     await run(() => deleteBatch(batch.id));
   };
 
@@ -81,6 +84,13 @@ export default function BatchPanel({ medication, onChanged }) {
     setEditForm(toForm(batch));
     setFieldErrors({});
   };
+
+  const statusLabel = (status) =>
+    status.kind === 'expired'
+      ? t('status.expiredAgo', { count: Math.abs(status.days) })
+      : status.kind === 'soon'
+        ? t('status.expiresIn', { count: status.days })
+        : t('status.ok');
 
   const batchField = (state, setState, name, label, props = {}) => (
     <label className="field">
@@ -95,28 +105,26 @@ export default function BatchPanel({ medication, onChanged }) {
     </label>
   );
 
-  if (loading) return <p className="empty">Loading stock lots...</p>;
+  if (loading) return <p className="empty">{t('batch.loading')}</p>;
 
   return (
     <div className="batch-panel">
-      <h3>Stock lots</h3>
-      {error && <div className="alert alert--error" role="alert">{error}</div>}
+      <h3>{t('batch.title')}</h3>
+      {error && <div className="alert alert--error" role="alert">{te(error)}</div>}
 
       {batches.length === 0 ? (
-        <p className="empty">No stock lots. Add one below to put this medication back in stock.</p>
+        <p className="empty">{t('batch.empty')}</p>
       ) : (
         <table className="table table--compact">
-          <caption className="sr-only">
-            Stock lots for {medication.name}, each with its own expiry date.
-          </caption>
+          <caption className="sr-only">{t('batch.caption', { name: medication.name })}</caption>
           <thead>
             <tr>
-              <th scope="col">Expiry date</th>
-              <th scope="col" className="num">Quantity</th>
-              <th scope="col">Lot number</th>
-              <th scope="col">Received</th>
-              <th scope="col">Status</th>
-              <th scope="col" className="actions">Actions</th>
+              <th scope="col">{t('batch.colExpiry')}</th>
+              <th scope="col" className="num">{t('common.quantity')}</th>
+              <th scope="col">{t('batch.colLot')}</th>
+              <th scope="col">{t('batch.colReceived')}</th>
+              <th scope="col">{t('common.status')}</th>
+              <th scope="col" className="actions">{t('common.actions')}</th>
             </tr>
           </thead>
           <tbody>
@@ -127,17 +135,17 @@ export default function BatchPanel({ medication, onChanged }) {
                   <tr key={batch.id}>
                     <td colSpan={6}>
                       <form className="batch-panel__form" onSubmit={handleSaveEdit}>
-                        {batchField(editForm, setEditForm, 'expiry_date', 'Expiry date', { type: 'date', required: true })}
-                        {batchField(editForm, setEditForm, 'quantity', 'Quantity', {
+                        {batchField(editForm, setEditForm, 'expiry_date', t('batch.colExpiry'), { type: 'date', required: true })}
+                        {batchField(editForm, setEditForm, 'quantity', t('common.quantity'), {
                           type: 'number', min: 0, step: 1, required: true,
                         })}
-                        {batchField(editForm, setEditForm, 'batch_number', 'Lot number', { maxLength: 60 })}
+                        {batchField(editForm, setEditForm, 'batch_number', t('batch.colLot'), { maxLength: 60 })}
                         <div className="form-actions">
                           <button type="submit" className="btn btn--sm btn--primary" disabled={saving}>
-                            {saving ? 'Saving...' : 'Save lot'}
+                            {saving ? t('common.saving') : t('batch.save')}
                           </button>{' '}
                           <button type="button" className="btn btn--sm" onClick={() => setEditingId(null)}>
-                            Cancel
+                            {t('common.cancel')}
                           </button>
                         </div>
                       </form>
@@ -149,18 +157,20 @@ export default function BatchPanel({ medication, onChanged }) {
                 <tr key={batch.id} className={status.modifier === 'danger' ? 'is-flagged' : undefined}>
                   <td className="date">{formatDate(batch.expiry_date)}</td>
                   <td className="num">{batch.quantity}</td>
-                  <td>{batch.batch_number || '—'}</td>
+                  <td><bdi>{batch.batch_number || '—'}</bdi></td>
                   <td className="date">{formatDate(batch.received_date)}</td>
-                  <td><span className={`badge badge--${status.modifier}`}>{status.label}</span></td>
+                  <td><span className={`badge badge--${status.modifier}`}>{statusLabel(status)}</span></td>
                   <td className="actions">
-                    <button type="button" className="btn btn--sm" onClick={() => startEdit(batch)}>Edit</button>{' '}
+                    <button type="button" className="btn btn--sm" onClick={() => startEdit(batch)}>
+                      {t('common.edit')}
+                    </button>{' '}
                     <button
                       type="button"
                       className="btn btn--sm btn--danger"
                       onClick={() => handleDelete(batch)}
                       disabled={saving}
                     >
-                      Remove
+                      {t('common.remove')}
                     </button>
                   </td>
                 </tr>
@@ -170,18 +180,18 @@ export default function BatchPanel({ medication, onChanged }) {
         </table>
       )}
 
-      <form className="batch-panel__form" onSubmit={handleAdd} aria-label="Receive stock">
-        <h4>Receive stock</h4>
+      <form className="batch-panel__form" onSubmit={handleAdd} aria-label={t('batch.receiveTitle')}>
+        <h4>{t('batch.receiveTitle')}</h4>
         <div className="form-grid">
-          {batchField(form, setForm, 'quantity', 'Quantity received', {
+          {batchField(form, setForm, 'quantity', t('batch.quantityReceived'), {
             type: 'number', min: 0, step: 1, required: true,
           })}
-          {batchField(form, setForm, 'expiry_date', 'Expiry date of this lot', { type: 'date', required: true })}
-          {batchField(form, setForm, 'batch_number', 'Lot number (optional)', { maxLength: 60 })}
+          {batchField(form, setForm, 'expiry_date', t('batch.lotExpiry'), { type: 'date', required: true })}
+          {batchField(form, setForm, 'batch_number', t('batch.lotNumberOptional'), { maxLength: 60 })}
         </div>
         <div className="form-actions">
           <button type="submit" className="btn btn--primary" disabled={saving}>
-            {saving ? 'Saving...' : 'Add lot'}
+            {saving ? t('common.saving') : t('batch.add')}
           </button>
         </div>
       </form>

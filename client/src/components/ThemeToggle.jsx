@@ -1,4 +1,5 @@
 import { THEMES, useTheme } from '../context/ThemeContext';
+import { useI18n } from '../i18n/I18nContext';
 
 const ICONS = {
   system: (
@@ -29,8 +30,6 @@ const ICONS = {
   ),
 };
 
-const LABELS = { system: 'System', light: 'Light', dark: 'Dark' };
-
 /**
  * Top-bar theme switch: one button that steps system -> light -> dark. Its
  * accessible name states the mode in force, including what "system" resolves
@@ -38,9 +37,10 @@ const LABELS = { system: 'System', light: 'Light', dark: 'Dark' };
  */
 export default function ThemeToggle() {
   const { theme, resolvedTheme, setTheme } = useTheme();
+  const { t } = useI18n();
   const next = THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length];
-  const current = theme === 'system' ? `${LABELS.system} (${LABELS[resolvedTheme].toLowerCase()})` : LABELS[theme];
-  const label = `Theme: ${current}. Switch to ${LABELS[next].toLowerCase()}`;
+  const current = t(`theme.current.${theme}`, { resolved: t(`theme.resolved.${resolvedTheme}`) });
+  const label = t('theme.label', { current, next: t(`theme.next.${next}`) });
 
   return (
     <button type="button" className="btn btn--ghost btn--icon" onClick={() => setTheme(next)} aria-label={label} title={label}>

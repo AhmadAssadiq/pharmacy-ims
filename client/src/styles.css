@@ -76,7 +76,11 @@
   --control-height: 36px;
 
   /* Type */
-  --font: 'Geist', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  /* Geist has no Arabic glyphs; Arabic text falls through to IBM Plex Sans
+     Arabic (loaded only when Arabic is chosen), so digits and Latin names keep
+     Geist's tabular figures in both languages. */
+  --font: 'Geist', 'IBM Plex Sans Arabic', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --edge-x: 3px;
   --fs-title: 24px;
   --fs-section: 16px;
   --fs-kpi: 30px;
@@ -118,6 +122,13 @@
    no data-theme is set and the OS preference decides. Contrast for every
    text/background pair was measured: text >= 4.5:1, borders and marks >= 3:1. */
 :root[data-theme='light'] { color-scheme: light; }
+
+/* ---------- Arabic ----------
+   Layout mirrors through logical properties (inline-start / inline-end), not a
+   second stylesheet. Arabic script needs more vertical room than Latin at the
+   same size, so the body line height opens up a little. */
+:root[dir='rtl'] { --edge-x: -3px; }
+:root[lang='ar'] { line-height: 1.6; }
 
 :root[data-theme='dark'] {
   color-scheme: dark;
@@ -276,7 +287,7 @@ a:hover { color: var(--link-hover); }
 
 .skip-link {
   position: absolute;
-  left: 12px;
+  inset-inline-start: 12px;
   top: -80px;
   z-index: 100;
   padding: 10px 14px;
@@ -318,9 +329,9 @@ a:hover { color: var(--link-hover); }
   font-size: var(--fs-small);
   font-weight: 400;
   color: var(--muted);
-  padding-left: 8px;
-  margin-left: 2px;
-  border-left: 1px solid var(--border);
+  padding-inline-start: 8px;
+  margin-inline-start: 2px;
+  border-inline-start: 1px solid var(--border);
 }
 
 .topbar__nav { display: flex; gap: 2px; flex-wrap: wrap; }
@@ -341,7 +352,7 @@ a:hover { color: var(--link-hover); }
 .topbar__link.active { background: var(--selected); color: var(--text); font-weight: 500; }
 
 .topbar__user {
-  margin-left: auto;
+  margin-inline-start: auto;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -444,18 +455,18 @@ a:hover { color: var(--link-hover); }
   width: 100%;
   padding: 16px var(--pad);
   border: 0;
-  border-left: 1px solid var(--rule);
+  border-inline-start: 1px solid var(--rule);
   border-radius: 0;
   background: transparent;
   font: inherit;
-  text-align: left;
+  text-align: start;
   cursor: pointer;
 }
 
 .kpi:hover { background: var(--hover-soft); }
 .kpi[aria-pressed='true'] { background: var(--selected); }
 
-.kpi:first-child { border-left: 0; }
+.kpi:first-child { border-inline-start: 0; }
 
 .kpi__label {
   display: block;
@@ -480,7 +491,7 @@ a:hover { color: var(--link-hover); }
 
 @media (max-width: 900px) {
   .kpi-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .kpi:nth-child(odd) { border-left: 0; }
+  .kpi:nth-child(odd) { border-inline-start: 0; }
   .kpi:nth-child(n + 3) { border-top: 1px solid var(--rule); }
 }
 
@@ -497,16 +508,16 @@ a:hover { color: var(--link-hover); }
 
 .toolbar__search svg {
   position: absolute;
-  left: 11px;
+  inset-inline-start: 11px;
   top: 50%;
   transform: translateY(-50%);
   color: var(--muted);
   pointer-events: none;
 }
 
-.toolbar__search input { padding-left: 34px; height: var(--control-height); }
+.toolbar__search input { padding-inline-start: 34px; height: var(--control-height); }
 
-.toolbar__count { margin-left: auto; font-size: var(--fs-small); color: var(--muted); }
+.toolbar__count { margin-inline-start: auto; font-size: var(--fs-small); color: var(--muted); }
 
 /* Filter chips are bound to the real flags, so they double as the legend. */
 .chip {
@@ -700,14 +711,14 @@ input[aria-invalid='true'], select[aria-invalid='true'] { border-color: var(--ne
 
 .table caption {
   caption-side: top;
-  text-align: left;
+  text-align: start;
   font-size: var(--fs-small);
   color: var(--muted);
   padding-bottom: 8px;
 }
 
 .table th, .table td {
-  text-align: left;
+  text-align: start;
   padding: 10px 10px;
   border-bottom: 1px solid var(--rule);
   vertical-align: middle;
@@ -728,12 +739,14 @@ input[aria-invalid='true'], select[aria-invalid='true'] { border-color: var(--ne
 
 .table tbody tr:last-child td { border-bottom: 0; }
 
-.table td.num, .table th.num { text-align: right; font-variant-numeric: tabular-nums; }
-.table .actions { text-align: right; white-space: nowrap; }
+.table td.num, .table th.num { text-align: end; font-variant-numeric: tabular-nums; }
+.table .actions { text-align: end; white-space: nowrap; }
 
 /* A flagged row is marked by a 3px ink edge, not by a colour wash. */
-.table tr.is-flagged > :first-child { box-shadow: inset 3px 0 0 var(--warning); }
-.table tr.is-expired > :first-child { box-shadow: inset 3px 0 0 var(--negative); }
+/* A flagged row's edge sits on its start side. box-shadow has no logical
+   form, so the offset flips sign under RTL. */
+.table tr.is-flagged > :first-child { box-shadow: inset var(--edge-x) 0 0 var(--warning); }
+.table tr.is-expired > :first-child { box-shadow: inset var(--edge-x) 0 0 var(--negative); }
 
 .table tbody tr:hover td { background: var(--row-hover); }
 
@@ -790,7 +803,7 @@ input[aria-invalid='true'], select[aria-invalid='true'] { border-color: var(--ne
    so the column can be scanned for "what dies first" without reading dates. */
 .runway__fill {
   position: absolute;
-  left: 0;
+  inset-inline-start: 0;
   top: 0;
   height: 100%;
   border-radius: 3px;
@@ -834,7 +847,7 @@ input[aria-invalid='true'], select[aria-invalid='true'] { border-color: var(--ne
   background: none;
   border: 0;
   border-radius: var(--radius-control);
-  text-align: left;
+  text-align: start;
   font: inherit;
   color: inherit;
   cursor: pointer;
@@ -857,7 +870,7 @@ input[aria-invalid='true'], select[aria-invalid='true'] { border-color: var(--ne
 .alert-row__days {
   flex: none;
   width: 52px;
-  text-align: right;
+  text-align: end;
   font-variant-numeric: tabular-nums;
 }
 
@@ -879,7 +892,7 @@ input[aria-invalid='true'], select[aria-invalid='true'] { border-color: var(--ne
   font-size: var(--fs-small);
 }
 
-.sale-preview__list { margin: 4px 0 0; padding-left: 18px; }
+.sale-preview__list { margin: 4px 0 0; padding-inline-start: 18px; }
 .sale-preview__list li { margin-bottom: 3px; }
 
 .sale-total {
@@ -1063,7 +1076,7 @@ input[aria-invalid='true'], select[aria-invalid='true'] { border-color: var(--ne
   width: 12px;
   height: 3px;
   border-radius: 1px;
-  margin-right: 6px;
+  margin-inline-end: 6px;
   vertical-align: middle;
 }
 
@@ -1072,6 +1085,14 @@ input[aria-invalid='true'], select[aria-invalid='true'] { border-color: var(--ne
 .chart__swatch--threshold { background: var(--negative); }
 
 /* ---------- Auth ---------- */
+.auth-bar {
+  position: absolute;
+  inset-block-start: 12px;
+  inset-inline-end: clamp(16px, 3vw, 32px);
+  display: flex;
+  gap: 4px;
+}
+
 .auth-page {
   min-height: 100vh;
   display: flex;
@@ -1106,7 +1127,7 @@ input[aria-invalid='true'], select[aria-invalid='true'] { border-color: var(--ne
 
 @media (max-width: 820px) {
   .kpi { padding: 12px 16px; }
-  .page { padding-left: 16px; padding-right: 16px; }
+  .page { padding-inline: 16px; }
 }
 
 /* The scroll container announces itself rather than silently clipping. */

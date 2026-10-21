@@ -6,12 +6,26 @@
     <meta name="theme-color" content="#f2f4f7" />
     <title>Pharmacy Inventory Management System</title>
     <script>
-      // Apply a stored theme before first paint so a dark-theme user never sees
-      // a flash of light. "system" stores nothing; the stylesheet's
-      // prefers-color-scheme block handles it. See src/context/ThemeContext.jsx.
+      // Apply a stored theme and language before first paint, so a dark-theme
+      // user never sees a flash of light and an Arabic user never sees the page
+      // laid out left to right first. "system" stores nothing; the stylesheet's
+      // prefers-color-scheme block handles it. See src/context/ThemeContext.jsx
+      // and src/i18n/I18nContext.jsx, which keep these in step afterwards.
       try {
+        var root = document.documentElement;
         var theme = localStorage.getItem('pims_theme');
-        if (theme === 'light' || theme === 'dark') document.documentElement.setAttribute('data-theme', theme);
+        if (theme === 'light' || theme === 'dark') root.setAttribute('data-theme', theme);
+        var lang = localStorage.getItem('pims_lang');
+        if (!lang) lang = (navigator.language || '').toLowerCase().indexOf('ar') === 0 ? 'ar' : 'en';
+        if (lang === 'ar') {
+          root.lang = 'ar';
+          root.dir = 'rtl';
+          var font = document.createElement('link');
+          font.id = 'font-arabic';
+          font.rel = 'stylesheet';
+          font.href = 'https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap';
+          document.head.appendChild(font);
+        }
       } catch (e) {}
     </script>
     <!-- Geist: the type system dealt with the achromatic-ledger app style. -->

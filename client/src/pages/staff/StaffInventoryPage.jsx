@@ -4,6 +4,10 @@ import { deleteMedication, fetchMedications, updateMedication } from '../../api/
 import InventoryTable from '../../components/inventory/InventoryTable';
 import MedicationForm from '../../components/inventory/MedicationForm';
 import ReorderAlertPanel from '../../components/alerts/ReorderAlertPanel';
+import { useI18n } from '../../i18n/I18nContext';
+import constants from '../../../../shared/constants.json';
+
+const { NEAR_EXPIRY_DAYS } = constants;
 
 /* The filters are bound to the flags the server already computes, so the
    counts in the KPI strip and the chips can never disagree with the table. */
@@ -31,6 +35,7 @@ function SearchIcon() {
  * evidence. Every change re-fetches, so the flags are never stale.
  */
 export default function StaffInventoryPage() {
+  const { t, te } = useI18n();
   const [medications, setMedications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -47,7 +52,7 @@ export default function StaffInventoryPage() {
       setMedications(data.medications);
       setError(null);
     } catch (err) {
-      setError(err.message);
+      setError(err);
     } finally {
       setLoading(false);
     }
@@ -68,21 +73,21 @@ export default function StaffInventoryPage() {
       await updateMedication(editing.id, payload);
       await load();
       setEditing(null);
-      flash('Medication updated.');
+      flash(t('inventory.updated'));
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = async (med) => {
-    if (!window.confirm(`Delete "${med.name}" from the catalog?`)) return;
+    if (!window.confirm(t('inventory.confirmDelete', { name: med.name }))) return;
     try {
       await deleteMedication(med.id);
       if (editing?.id === med.id) setEditing(null);
       await load();
-      flash(`${med.name} deleted from the catalog.`);
+      flash(t('inventory.deleted', { name: med.name }));
     } catch (err) {
-      setError(err.message);
+      setError(err);
     }
   };
 
@@ -116,60 +121,49 @@ export default function StaffInventoryPage() {
   /* The screen's one finding: the most urgent thing in today's data. */
   const finding = (() => {
     if (loading || error) return null;
-    if (counts.expired > 0) {
-      return (
-        <>
-          <strong>{counts.expired}</strong>{' '}
-          {counts.expired === 1 ? 'medication is' : 'medications are'} holding expired stock that
-          cannot be dispensed.
-        </>
-      );
-    }
-    if (counts.low > 0) {
-      return (
-        <>
-          <strong>{counts.low}</strong> {counts.low === 1 ? 'medication is' : 'medications are'}{' '}
-          at or below its reorder level.
-        </>
-      );
-    }
+    // The count renders bold; `n` picks the plural form.
+    const bold = (n) => ({ count: <strong>{n}</strong>, n });
+    if (counts.expired > 0) return t('inventory.findingExpired', bold(counts.expired));
+    if (counts.low > 0) return t('inventory.findingLow', bold(counts.low));
     if (counts.expiring > 0) {
-      return (
-        <>
-          <strong>{counts.expiring}</strong> {counts.expiring === 1 ? 'lot expires' : 'lots expire'}{' '}
-          within 30 days. Nothing is below its reorder level.
-        </>
-      );
+      return t('inventory.findingExpiring', { ...bold(counts.expiring), days: NEAR_EXPIRY_DAYS });
     }
-    return <>Every medication is above its reorder level with no lot expiring within 30 days.</>;
+    return t('inventory.findingClear', { days: NEAR_EXPIRY_DAYS });
   })();
 
   const kpis = [
-    { key: 'all', label: 'Medications', value: counts.all, tone: '' },
-    { key: 'low', label: 'At or below reorder level', value: counts.low, tone: counts.low ? '' : 'zero' },
+    { key: 'all', label: t('inventory.kpiAll'), value: counts.all, tone: '' },
+    { key: 'low', label: t('inventory.kpiLow'), value: counts.low, tone: counts.low ? '' : 'zero' },
     {
       key: 'expiring',
-      label: 'Lots expiring within 30 days',
+      label: t('inventory.kpiExpiring', { days: NEAR_EXPIRY_DAYS }),
       value: counts.expiring,
       tone: counts.expiring ? '' : 'zero',
     },
     {
       key: 'expired',
-      label: 'Holding expired stock',
+      label: t('inventory.kpiExpired'),
       value: counts.expired,
       tone: counts.expired ? 'alert' : 'zero',
     },
+  ];
+
+  const chips = [
+    { key: 'all', label: t('inventory.chipAll') },
+    { key: 'low', label: t('inventory.chipLow') },
+    { key: 'expiring', label: t('inventory.chipExpiring') },
+    { key: 'expired', label: t('inventory.chipExpired') },
   ];
 
   return (
     <>
       <div className="page-header">
         <div>
-          <h1>Inventory</h1>
+          <h1>{t('inventory.title')}</h1>
           {finding && <p className="page-finding">{finding}</p>}
         </div>
         <Link to="/staff/stock" className="btn btn--primary">
-          Receive stock
+          {t('inventory.receiveStock')}
         </Link>
       </div>
 
@@ -180,7 +174,7 @@ export default function StaffInventoryPage() {
       )}
       {error && (
         <div className="alert alert--error" role="alert">
-          {error}
+          {te(error)}
         </div>
       )}
 
@@ -206,14 +200,12 @@ export default function StaffInventoryPage() {
         ))}
       </div>
 
-      <ReorderAlertPanel onReceiveStock={() => {}} />
+      <ReorderAlertPanel />
 
       <div className="card">
         <div className="card__header">
-          <h2>Stock on hand</h2>
-          <span className="card__note">
-            Quantities exclude expired lots, which cannot be dispensed.
-          </span>
+          <h2>{t('inventory.stockOnHand')}</h2>
+          <span className="card__note">{t('inventory.stockNote')}</span>
         </div>
 
         <div className="toolbar">
@@ -223,16 +215,11 @@ export default function StaffInventoryPage() {
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search name, category or supplier"
-              aria-label="Search medications"
+              placeholder={t('inventory.searchPlaceholder')}
+              aria-label={t('inventory.searchLabel')}
             />
           </div>
-          {[
-            { key: 'all', label: 'All' },
-            { key: 'low', label: 'Low stock' },
-            { key: 'expiring', label: 'Expiring' },
-            { key: 'expired', label: 'Expired' },
-          ].map((chip) => (
+          {chips.map((chip) => (
             <button
               key={chip.key}
               type="button"
@@ -245,12 +232,12 @@ export default function StaffInventoryPage() {
             </button>
           ))}
           <span className="toolbar__count" aria-live="polite">
-            {loading ? 'Loading' : `${visible.length} of ${counts.all} shown`}
+            {loading ? t('inventory.loadingCount') : t('inventory.shown', { shown: visible.length, total: counts.all })}
           </span>
         </div>
 
         {loading ? (
-          <p className="empty">Loading inventory...</p>
+          <p className="empty">{t('inventory.loadingInventory')}</p>
         ) : (
           <InventoryTable
             medications={visible}

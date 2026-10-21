@@ -3,12 +3,7 @@ import { fetchMessages, fetchSessions, postMessage } from '../../api/chat';
 import ChatWindow from '../../components/chat/ChatWindow';
 import { useAuth } from '../../context/AuthContext';
 import useChatSocket from '../../hooks/useChatSocket';
-
-function formatTime(timestamp) {
-  if (!timestamp) return '';
-  const date = new Date(String(timestamp).replace(' ', 'T'));
-  return Number.isNaN(date.getTime()) ? '' : date.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
-}
+import { useI18n } from '../../i18n/I18nContext';
 
 /**
  * Staff unified inbox (FR 5.2): every patient session in one list, with the
@@ -17,6 +12,7 @@ function formatTime(timestamp) {
  */
 export default function StaffChatInboxPage() {
   const { user } = useAuth();
+  const { t, te, formatDateTime } = useI18n();
   const [sessions, setSessions] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -27,7 +23,7 @@ export default function StaffChatInboxPage() {
   useEffect(() => {
     fetchSessions()
       .then((data) => setSessions(data.sessions))
-      .catch((err) => setError(err.message))
+      .catch((err) => setError(err))
       .finally(() => setLoadingSessions(false));
   }, []);
 
@@ -40,7 +36,7 @@ export default function StaffChatInboxPage() {
         if (!cancelled) setMessages(data.messages);
       })
       .catch((err) => {
-        if (!cancelled) setError(err.message);
+        if (!cancelled) setError(err);
       })
       .finally(() => {
         if (!cancelled) setLoadingMessages(false);
@@ -91,16 +87,16 @@ export default function StaffChatInboxPage() {
   return (
     <>
       <div className="page-header">
-        <h1>Chat inbox</h1>
-        <div className="status-line">{sessions.length} active session{sessions.length === 1 ? '' : 's'}</div>
+        <h1>{t('chat.inboxTitle')}</h1>
+        <div className="status-line">{t('chat.activeSessions', { count: sessions.length })}</div>
       </div>
-      {error && <div className="alert alert--error" role="alert">{error}</div>}
+      {error && <div className="alert alert--error" role="alert">{te(error)}</div>}
 
       <div className="chat-layout">
-        <aside className="card" aria-label="Chat sessions">
-          <h2>Patients</h2>
-          {loadingSessions && <p className="muted">Loading sessions...</p>}
-          {!loadingSessions && sessions.length === 0 && <p className="empty">No chat sessions yet.</p>}
+        <aside className="card" aria-label={t('chat.sessionsLabel')}>
+          <h2>{t('chat.patients')}</h2>
+          {loadingSessions && <p className="muted">{t('chat.loadingSessions')}</p>}
+          {!loadingSessions && sessions.length === 0 && <p className="empty">{t('chat.noSessions')}</p>}
           <ul className="list">
             {sessions.map((s) => (
               <li key={s.id}>
@@ -110,14 +106,14 @@ export default function StaffChatInboxPage() {
                   onClick={() => setSelectedId(s.id)}
                 >
                   <span>
-                    <strong>{s.patient_name}</strong>
+                    <strong><bdi>{s.patient_name}</bdi></strong>
                     <br />
                     <span className="muted" style={{ fontSize: '0.85rem' }}>
-                      {s.last_message ? s.last_message.slice(0, 40) : 'No messages yet'}
+                      {s.last_message ? <bdi>{s.last_message.slice(0, 40)}</bdi> : t('chat.noMessagesYet')}
                     </span>
                   </span>
                   <span className="muted" style={{ fontSize: '0.75rem', whiteSpace: 'nowrap' }}>
-                    {formatTime(s.last_message_at || s.created_at)}
+                    {formatDateTime(s.last_message_at || s.created_at)}
                   </span>
                 </button>
               </li>
@@ -128,7 +124,7 @@ export default function StaffChatInboxPage() {
         {selected ? (
           <ChatWindow
             title={selected.patient_name}
-            subtitle={selected.staff_id ? 'Assigned' : 'Unassigned'}
+            subtitle={selected.staff_id ? t('chat.assigned') : t('chat.unassigned')}
             messages={messages}
             currentUserId={user.id}
             onSend={handleSend}
@@ -137,7 +133,7 @@ export default function StaffChatInboxPage() {
           />
         ) : (
           <section className="card">
-            <p className="empty">Select a patient to view the conversation.</p>
+            <p className="empty">{t('chat.selectPatient')}</p>
           </section>
         )}
       </div>

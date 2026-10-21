@@ -1,6 +1,13 @@
+import { useI18n } from '../../i18n/I18nContext';
+
 const WIDTH = 720;
 const HEIGHT = 220;
 const PAD = { top: 14, right: 10, bottom: 30, left: 36 };
+
+/* Charts stay left to right in Arabic too: time running left to right is the
+   convention for charts in both languages. `direction: ltr` on the <svg> also
+   stops an RTL page from flipping every text-anchor. The legend is HTML and
+   follows the page direction. */
 
 /**
  * Daily units sold, with the model's predicted demand appended after today.
@@ -8,13 +15,14 @@ const PAD = { top: 14, right: 10, bottom: 30, left: 36 };
  * carries a <title> for a native hover tooltip.
  */
 export default function DemandChart({ history, forecast, historyDays = 30 }) {
+  const { t, formatDayMonth } = useI18n();
   const recent = history.slice(-historyDays);
   const bars = [
     ...recent.map((row) => ({ date: row.date, value: Number(row.quantity_sold), predicted: false })),
     ...forecast.map((row) => ({ date: row.date, value: Number(row.predicted_demand), predicted: true })),
   ];
 
-  if (bars.length === 0) return <p className="empty">No sales recorded for this medication yet.</p>;
+  if (bars.length === 0) return <p className="empty">{t('chart.noSales')}</p>;
 
   const plotWidth = WIDTH - PAD.left - PAD.right;
   const plotHeight = HEIGHT - PAD.top - PAD.bottom;
@@ -26,22 +34,26 @@ export default function DemandChart({ history, forecast, historyDays = 30 }) {
   const boundary = recent.length;
 
   const labels = [
-    { index: 0, text: bars[0].date.slice(5) },
-    ...(boundary > 0 && boundary < bars.length ? [{ index: boundary, text: 'today' }] : []),
-    { index: bars.length - 1, text: bars[bars.length - 1].date.slice(5) },
+    // The end labels anchor inward so a long month name ("تشرين الأول") never clips.
+    { index: 0, text: formatDayMonth(bars[0].date), anchor: 'start', x: PAD.left },
+    ...(boundary > 0 && boundary < bars.length
+      ? [{ index: boundary, text: t('chart.today'), anchor: 'middle', x: PAD.left + boundary * step + barWidth / 2 }]
+      : []),
+    { index: bars.length - 1, text: formatDayMonth(bars[bars.length - 1].date), anchor: 'end', x: WIDTH - PAD.right },
   ];
 
   return (
     <figure className="chart">
       <figcaption className="chart__legend">
-        <span><i className="chart__swatch chart__swatch--actual" aria-hidden="true" /> Units sold</span>
-        <span><i className="chart__swatch chart__swatch--predicted" aria-hidden="true" /> Predicted demand</span>
+        <span><i className="chart__swatch chart__swatch--actual" aria-hidden="true" /> {t('chart.unitsSold')}</span>
+        <span><i className="chart__swatch chart__swatch--predicted" aria-hidden="true" /> {t('chart.predicted')}</span>
       </figcaption>
       <svg
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         width="100%"
+        style={{ direction: 'ltr' }}
         role="img"
-        aria-label={`Daily units sold over the last ${recent.length} days, followed by ${forecast.length} days of predicted demand`}
+        aria-label={t('chart.demandAria', { history: recent.length, forecast: forecast.length })}
       >
         {[0, max / 2, max].map((tick) => (
           <g key={tick}>
@@ -68,7 +80,12 @@ export default function DemandChart({ history, forecast, historyDays = 30 }) {
             height={Math.max(baseline - y(bar.value), 0)}
             fill={bar.predicted ? 'var(--chart-2)' : 'var(--color-primary)'}
           >
-            <title>{`${bar.date}: ${bar.value} units${bar.predicted ? ' (predicted)' : ''}`}</title>
+            <title>
+              {t(bar.predicted ? 'chart.barTitlePredicted' : 'chart.barTitle', {
+                date: formatDayMonth(bar.date),
+                count: bar.value,
+              })}
+            </title>
           </rect>
         ))}
 
@@ -89,9 +106,9 @@ export default function DemandChart({ history, forecast, historyDays = 30 }) {
         {labels.map((label) => (
           <text
             key={label.text}
-            x={PAD.left + label.index * step + barWidth / 2}
+            x={label.x}
             y={HEIGHT - 10}
-            textAnchor="middle"
+            textAnchor={label.anchor}
             fontSize="10"
             fill="var(--color-muted)"
           >

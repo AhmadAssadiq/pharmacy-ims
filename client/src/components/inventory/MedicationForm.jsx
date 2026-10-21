@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import constants from '../../../../shared/constants.json';
+import { useI18n } from '../../i18n/I18nContext';
 
 const EMPTY = {
   name: '',
@@ -19,6 +20,7 @@ const EMPTY = {
  * the medication's stock lots.
  */
 export default function MedicationForm({ initialValue, onSubmit, onCancel, submitting }) {
+  const { t, te } = useI18n();
   const [form, setForm] = useState(EMPTY);
   const [error, setError] = useState(null);
   const [fieldErrors, setFieldErrors] = useState({});
@@ -59,7 +61,7 @@ export default function MedicationForm({ initialValue, onSubmit, onCancel, submi
       await onSubmit(payload);
       if (!isEdit) setForm({ ...EMPTY, low_stock_threshold: String(constants.LOW_STOCK_THRESHOLD) });
     } catch (err) {
-      setError(err.message);
+      setError(te(err));
       setFieldErrors(err.details || {});
     }
   };
@@ -73,41 +75,43 @@ export default function MedicationForm({ initialValue, onSubmit, onCancel, submi
   );
 
   return (
-    <form className="card" onSubmit={handleSubmit} aria-label={isEdit ? 'Edit medication' : 'Add medication'}>
-      <h2>{isEdit ? `Edit: ${initialValue.name}` : 'Add medication'}</h2>
+    <form
+      className="card"
+      onSubmit={handleSubmit}
+      aria-label={isEdit ? t('medicationForm.editLabel') : t('medicationForm.addTitle')}
+    >
+      <h2>{isEdit ? t('medicationForm.editTitle', { name: initialValue.name }) : t('medicationForm.addTitle')}</h2>
       {error && <div className="alert alert--error" role="alert">{error}</div>}
 
       <div className="form-grid">
-        {field('name', 'Medication name', { required: true, maxLength: 150 })}
-        {field('category', 'Category', { required: true, maxLength: 100 })}
-        {field('unit_price', 'Unit price', { required: true, type: 'number', min: 0, step: '0.01' })}
-        {field('supplier_info', 'Supplier information', { required: true, maxLength: 255 })}
-        {field('low_stock_threshold', 'Reorder threshold (units)', {
+        {field('name', t('medicationForm.name'), { required: true, maxLength: 150 })}
+        {field('category', t('medicationForm.category'), { required: true, maxLength: 100 })}
+        {field('unit_price', t('medicationForm.price'), { required: true, type: 'number', min: 0, step: '0.01' })}
+        {field('supplier_info', t('medicationForm.supplier'), { required: true, maxLength: 255 })}
+        {field('low_stock_threshold', t('medicationForm.threshold'), {
           required: true, type: 'number', min: 0, step: 1,
         })}
       </div>
 
       {!isEdit && (
         <>
-          <h3>Opening stock lot</h3>
-          <p className="muted">
-            Stock is tracked per lot so each delivery keeps its own expiry date. More lots can be added afterwards.
-          </p>
+          <h3>{t('medicationForm.openingLot')}</h3>
+          <p className="muted">{t('medicationForm.openingNote')}</p>
           <div className="form-grid">
-            {field('quantity', 'Quantity in stock', { required: true, type: 'number', min: 0, step: 1 })}
-            {field('expiry_date', 'Expiry date of this lot', { required: true, type: 'date' })}
-            {field('batch_number', 'Lot number (optional)', { maxLength: 60 })}
+            {field('quantity', t('medicationForm.quantityInStock'), { required: true, type: 'number', min: 0, step: 1 })}
+            {field('expiry_date', t('batch.lotExpiry'), { required: true, type: 'date' })}
+            {field('batch_number', t('batch.lotNumberOptional'), { maxLength: 60 })}
           </div>
         </>
       )}
 
       <div className="form-actions">
         <button type="submit" className="btn btn--primary" disabled={submitting}>
-          {submitting ? 'Saving...' : isEdit ? 'Save changes' : 'Add medication'}
+          {submitting ? t('common.saving') : isEdit ? t('medicationForm.saveChanges') : t('medicationForm.add')}
         </button>
         {isEdit && (
           <button type="button" className="btn" onClick={onCancel} disabled={submitting}>
-            Cancel
+            {t('common.cancel')}
           </button>
         )}
       </div>

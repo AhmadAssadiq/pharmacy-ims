@@ -5,10 +5,12 @@
 const STORAGE_KEY = 'pims_auth';
 
 export class ApiError extends Error {
-  constructor(status, message, details) {
+  constructor(status, message, details, code, params) {
     super(message);
     this.status = status;
     this.details = details;
+    this.code = code; // stable ERROR_CODES value, translated by useI18n().te
+    this.params = params;
   }
 }
 
@@ -36,11 +38,16 @@ export async function request(path, { method = 'GET', body } = {}) {
   if (token) headers.Authorization = `Bearer ${token}`;
   if (body !== undefined) headers['Content-Type'] = 'application/json';
 
-  const response = await fetch(`/api${path}`, {
-    method,
-    headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  let response;
+  try {
+    response = await fetch(`/api${path}`, {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  } catch {
+    throw new ApiError(0, 'Network error', undefined, 'NETWORK');
+  }
 
   const data = response.status === 204 ? null : await response.json().catch(() => null);
 
@@ -49,7 +56,7 @@ export async function request(path, { method = 'GET', body } = {}) {
       // Token expired or invalid: notify the auth context so it can log out.
       window.dispatchEvent(new Event('pims:unauthorized'));
     }
-    throw new ApiError(response.status, data?.error || response.statusText, data?.details);
+    throw new ApiError(response.status, data?.error || response.statusText, data?.details, data?.code, data?.params);
   }
   return data;
 }

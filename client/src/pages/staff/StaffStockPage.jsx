@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { createMedication, fetchMedications } from '../../api/medications';
 import MedicationForm from '../../components/inventory/MedicationForm';
 import BatchPanel from '../../components/inventory/BatchPanel';
-import { formatDate } from '../../utils/expiry';
+import { useI18n } from '../../i18n/I18nContext';
 
 const NEW_MEDICATION = 'new';
 
@@ -16,6 +16,7 @@ const NEW_MEDICATION = 'new';
  * alert's "Receive stock" link opens the page with that medication chosen.
  */
 export default function StaffStockPage() {
+  const { t, te, formatDate } = useI18n();
   const [medications, setMedications] = useState([]);
   const [searchParams, setSearchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
@@ -31,7 +32,7 @@ export default function StaffStockPage() {
 
   useEffect(() => {
     load()
-      .catch((err) => setError(err.message))
+      .catch((err) => setError(err))
       .finally(() => setLoading(false));
   }, [load]);
 
@@ -53,7 +54,7 @@ export default function StaffStockPage() {
       await load();
       // Jump to the medication just created so more lots can be added to it.
       setTarget(String(data.medication.id));
-      flash(`Added ${data.medication.name} to the catalog with its first stock lot.`);
+      flash(t('stock.added', { name: data.medication.name }));
     } finally {
       setSaving(false);
     }
@@ -61,33 +62,33 @@ export default function StaffStockPage() {
 
   const handleBatchesChanged = async () => {
     await load();
-    flash('Stock lots updated.');
+    flash(t('stock.lotsUpdated'));
   };
 
   return (
     <>
       <div className="page-header">
-        <h1>Add stock</h1>
-        <div className="status-line">Receive a new lot, or add a medication the catalog does not carry yet</div>
+        <h1>{t('stock.title')}</h1>
+        <div className="status-line">{t('stock.subtitle')}</div>
       </div>
 
       {notice && <div className="alert alert--success" role="status">{notice}</div>}
-      {error && <div className="alert alert--error" role="alert">{error}</div>}
+      {error && <div className="alert alert--error" role="alert">{te(error)}</div>}
 
       <div className="card">
-        <h2>What are you stocking?</h2>
+        <h2>{t('stock.question')}</h2>
         {loading ? (
-          <p className="muted">Loading catalog...</p>
+          <p className="muted">{t('common.loadingCatalog')}</p>
         ) : (
           <label className="field">
-            <span className="field__label">Medication</span>
+            <span className="field__label">{t('common.medication')}</span>
             <select value={target} onChange={(e) => setTarget(e.target.value)}>
-              <option value="">Select...</option>
-              <option value={NEW_MEDICATION}>+ New medication (not in the catalog yet)</option>
-              <optgroup label="Already in the catalog">
+              <option value="">{t('stock.select')}</option>
+              <option value={NEW_MEDICATION}>{t('stock.newOption')}</option>
+              <optgroup label={t('stock.inCatalog')}>
                 {medications.map((med) => (
                   <option key={med.id} value={med.id}>
-                    {med.name} — {med.quantity} in stock
+                    {t('stock.option', { name: med.name, quantity: med.quantity })}
                   </option>
                 ))}
               </optgroup>
@@ -103,23 +104,23 @@ export default function StaffStockPage() {
       {selected && (
         <>
           <div className="card">
-            <h2>{selected.name}</h2>
+            <h2><bdi>{selected.name}</bdi></h2>
             <div className="stock-summary">
               <div>
-                <span className="field__label">In stock</span>
+                <span className="field__label">{t('common.inStock')}</span>
                 <strong>{selected.quantity}</strong>
               </div>
               <div>
-                <span className="field__label">Reorder at</span>
+                <span className="field__label">{t('common.reorderAt')}</span>
                 <strong>{selected.low_stock_threshold}</strong>
               </div>
               <div>
-                <span className="field__label">Next expiry</span>
+                <span className="field__label">{t('common.nextExpiry')}</span>
                 <strong>{formatDate(selected.expiry_date)}</strong>
               </div>
               {selected.expired_quantity > 0 && (
                 <div>
-                  <span className="field__label">Expired units</span>
+                  <span className="field__label">{t('stock.expiredUnits')}</span>
                   <strong className="text-danger">{selected.expired_quantity}</strong>
                 </div>
               )}

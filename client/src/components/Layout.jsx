@@ -1,20 +1,22 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useI18n } from '../i18n/I18nContext';
 import { ROLES } from '../utils/routes';
 import Clock from './Clock';
 import ThemeToggle from './ThemeToggle';
+import LanguageToggle from './LanguageToggle';
 
 const STAFF_LINKS = [
-  { to: '/staff/inventory', label: 'Inventory' },
-  { to: '/staff/stock', label: 'Add stock' },
-  { to: '/staff/sell', label: 'Dispense' },
-  { to: '/staff/forecast', label: 'Forecast' },
-  { to: '/staff/chat', label: 'Chat inbox' },
+  { to: '/staff/inventory', label: 'nav.inventory' },
+  { to: '/staff/stock', label: 'nav.addStock' },
+  { to: '/staff/sell', label: 'nav.dispense' },
+  { to: '/staff/forecast', label: 'nav.forecast' },
+  { to: '/staff/chat', label: 'nav.chatInbox' },
 ];
 
 const PATIENT_LINKS = [
-  { to: '/patient/availability', label: 'Medication availability' },
-  { to: '/patient/chat', label: 'Chat with pharmacy' },
+  { to: '/patient/availability', label: 'nav.availability' },
+  { to: '/patient/chat', label: 'nav.patientChat' },
 ];
 
 /** The product's mark: a dispensing cross, drawn in the chrome tokens so it follows the theme. */
@@ -30,6 +32,7 @@ function Mark() {
 /** Page frame with the role-specific navigation bar. */
 export default function Layout() {
   const { user, logout } = useAuth();
+  const { t } = useI18n();
   const navigate = useNavigate();
   const isStaff = user.role === ROLES.STAFF;
   const links = isStaff ? STAFF_LINKS : PATIENT_LINKS;
@@ -42,30 +45,31 @@ export default function Layout() {
   return (
     <div className="app-shell">
       <a className="skip-link" href="#main">
-        Skip to content
+        {t('app.skipToContent')}
       </a>
       <header className="topbar">
         <span className="topbar__brand">
           <Mark />
-          Pharmacy IMS
-          <span className="topbar__scope">{isStaff ? 'Dispensary' : 'Patient portal'}</span>
+          {t('app.brand')}
+          <span className="topbar__scope">{isStaff ? t('nav.scopeStaff') : t('nav.scopePatient')}</span>
         </span>
-        <nav className="topbar__nav" aria-label="Main navigation">
+        <nav className="topbar__nav" aria-label={t('nav.main')}>
           {links.map((link) => (
             <NavLink key={link.to} to={link.to} className="topbar__link">
-              {link.label}
+              {t(link.label)}
             </NavLink>
           ))}
         </nav>
         <div className="topbar__user">
-          <Clock locale="en-GB" />
+          <Clock />
+          <LanguageToggle />
           <ThemeToggle />
           <span className="topbar__who">
             <span>{user.name}</span>
-            <span className="topbar__role">{isStaff ? 'Staff' : 'Patient'}</span>
+            <span className="topbar__role">{isStaff ? t('nav.roleStaff') : t('nav.rolePatient')}</span>
           </span>
           <button type="button" className="btn btn--sm" onClick={handleLogout}>
-            Log out
+            {t('nav.logout')}
           </button>
         </div>
       </header>

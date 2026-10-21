@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchMedications } from '../../api/medications';
 import { fetchRecentSales, previewSale, recordSale } from '../../api/sales';
-import { formatDate } from '../../utils/expiry';
 import ConfirmDialog from '../../components/ConfirmDialog';
+import { useI18n } from '../../i18n/I18nContext';
+import constants from '../../../../shared/constants.json';
 
 /**
  * Dispensing counter. A sale is a basket of one or more medications; completing
@@ -10,6 +11,7 @@ import ConfirmDialog from '../../components/ConfirmDialog';
  * the transaction into the sales history the forecasting model trains on.
  */
 export default function StaffSellPage() {
+  const { t, te, formatDate, formatPrice } = useI18n();
   const [medications, setMedications] = useState([]);
   const [sales, setSales] = useState([]);
   const [items, setItems] = useState([]);
@@ -32,13 +34,24 @@ export default function StaffSellPage() {
 
   useEffect(() => {
     load()
-      .catch((err) => setError(err.message))
+      .catch((err) => setError(te(err)))
       .finally(() => setLoading(false));
+    // Loads once; a language switch must not refetch the catalog.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [load]);
 
   const selected = medications.find((m) => String(m.id) === String(medicationId)) || null;
   const totalQuantity = items.reduce((sum, item) => sum + item.quantity, 0);
   const totalPrice = items.reduce((sum, item) => sum + item.unit_price * item.quantity, 0);
+
+  /** "2 medications · 5 units", with the unit count optionally set as a number cell. */
+  const summary = (unitsAsNum) =>
+    t('sell.summary', {
+      medications: t('common.medications', { count: items.length }),
+      units: unitsAsNum
+        ? t('common.units', { count: <span className="num">{totalQuantity}</span>, n: totalQuantity })
+        : t('common.units', { count: totalQuantity }),
+    });
 
   /**
    * Adds a line, previewing the lots it will draw from. A medication already in
@@ -52,12 +65,12 @@ export default function StaffSellPage() {
 
     const medication = medications.find((m) => String(m.id) === String(medicationId));
     if (!medication) {
-      setFieldErrors({ medication_id: 'Select a medication first' });
+      setFieldErrors({ medication_id: t('sell.errorSelectFirst') });
       return;
     }
     const requested = Number(quantity);
     if (!Number.isInteger(requested) || requested <= 0) {
-      setFieldErrors({ quantity: 'Enter a quantity of at least 1' });
+      setFieldErrors({ quantity: t('sell.errorQuantityMin') });
       return;
     }
 
@@ -70,8 +83,12 @@ export default function StaffSellPage() {
       if (preview.shortfall > 0) {
         setFieldErrors({
           quantity: existing
-            ? `Only ${preview.available} unit(s) of ${medication.name} available and ${existing.quantity} already in this sale`
-            : `Only ${preview.available} unit(s) of ${medication.name} available`,
+            ? t('sell.errorOnlyAvailableWithExisting', {
+              count: preview.available,
+              name: medication.name,
+              existing: existing.quantity,
+            })
+            : t('sell.errorOnlyAvailable', { count: preview.available, name: medication.name }),
         });
         return;
       }
@@ -89,7 +106,7 @@ export default function StaffSellPage() {
       setMedicationId('');
       setQuantity('1');
     } catch (err) {
-      setError(err.message);
+      setError(te(err));
     } finally {
       setAdding(false);
     }
@@ -110,7 +127,7 @@ export default function StaffSellPage() {
     setConfirming(false);
 
     if (items.length === 0) {
-      setError('Add at least one medication to the sale.');
+      setError(t('sell.errorEmpty'));
       return;
     }
 
@@ -121,27 +138,35 @@ export default function StaffSellPage() {
       });
       const { sale } = data;
       setNotice(
-        `Dispensed ${sale.total_quantity} unit(s) across ${sale.lines.length} medication(s), total ${sale.total_price.toFixed(2)}. Stock has been reduced.`
+        t('sell.dispensed', {
+          units: t('common.units', { count: sale.total_quantity }),
+          medications: t('common.medications', { count: sale.lines.length }),
+          total: formatPrice(sale.total_price),
+        })
       );
       setItems([]);
       await load();
     } catch (err) {
-      setError(err.message);
-      setFieldErrors(err.details || {});
+      setError(te(err));
+      // A coded shortfall is fully described by the banner; its English detail would repeat it.
+      if (err.code !== constants.ERROR_CODES.STOCK_INSUFFICIENT) setFieldErrors(err.details || {});
     } finally {
       setSaving(false);
     }
   };
 
+  const lotLine = (line) =>
+    t('sell.lotLine', {
+      take: <span className="num">{line.take}</span>,
+      date: <span className="date">{formatDate(line.expiry_date)}</span>,
+    });
+
   return (
     <>
       <div className="page-header">
         <div>
-          <h1>Dispense</h1>
-          <p className="page-finding">
-            Stock leaves the shelf when a sale is completed. Each line is drawn from the lot
-            closest to expiry first, and the move cannot be undone.
-          </p>
+          <h1>{t('sell.title')}</h1>
+          <p className="page-finding">{t('sell.finding')}</p>
         </div>
       </div>
 
@@ -156,22 +181,25 @@ export default function StaffSellPage() {
         </div>
       )}
 
-      <form className="card" onSubmit={handleAddLine} aria-label="Add a medication to the sale">
+      <form className="card" onSubmit={handleAddLine} aria-label={t('sell.addFormLabel')}>
         <div className="card__header">
-          <h2>Add to sale</h2>
-          <span className="card__note">Out-of-stock medications cannot be selected.</span>
+          <h2>{t('sell.addTitle')}</h2>
+          <span className="card__note">{t('sell.addNote')}</span>
         </div>
         {loading ? (
-          <p className="empty">Loading catalog...</p>
+          <p className="empty">{t('common.loadingCatalog')}</p>
         ) : (
           <div className="form-grid">
             <label className="field">
-              <span className="field__label">Medication</span>
+              <span className="field__label">{t('common.medication')}</span>
               <select value={medicationId} onChange={(e) => setMedicationId(e.target.value)}>
-                <option value="">Select a medication...</option>
+                <option value="">{t('sell.selectMedication')}</option>
                 {medications.map((med) => (
                   <option key={med.id} value={med.id} disabled={med.quantity <= 0}>
-                    {med.name} ({med.quantity} in stock{med.quantity <= 0 ? ' - unavailable' : ''})
+                    {t(med.quantity <= 0 ? 'sell.optionUnavailable' : 'sell.option', {
+                      name: med.name,
+                      quantity: med.quantity,
+                    })}
                   </option>
                 ))}
               </select>
@@ -179,7 +207,7 @@ export default function StaffSellPage() {
             </label>
 
             <label className="field">
-              <span className="field__label">Quantity</span>
+              <span className="field__label">{t('common.quantity')}</span>
               <input
                 type="number"
                 min={1}
@@ -192,7 +220,7 @@ export default function StaffSellPage() {
               />
               {selected && (
                 <span className="field__hint" id="qty-available">
-                  <span className="num">{selected.quantity}</span> available
+                  {t('sell.available', { count: <span className="num">{selected.quantity}</span> })}
                 </span>
               )}
               {fieldErrors.quantity && <span className="field__error">{fieldErrors.quantity}</span>}
@@ -201,7 +229,7 @@ export default function StaffSellPage() {
             <div className="field">
               <span className="field__label" aria-hidden="true">&nbsp;</span>
               <button type="submit" className="btn" disabled={adding}>
-                {adding ? 'Checking stock...' : 'Add to sale'}
+                {adding ? t('sell.checkingStock') : t('sell.add')}
               </button>
             </div>
           </div>
@@ -210,58 +238,53 @@ export default function StaffSellPage() {
 
       <div className="card">
         <div className="card__header">
-          <h2>Current sale</h2>
-          {items.length > 0 && <span className="card__note">Check each lot before dispensing.</span>}
+          <h2>{t('sell.current')}</h2>
+          {items.length > 0 && <span className="card__note">{t('sell.checkNote')}</span>}
         </div>
         {fieldErrors.items && <div className="alert alert--error" role="alert">{fieldErrors.items}</div>}
 
         {items.length === 0 ? (
-          <p className="empty empty--framed">
-            Nothing added yet. Add one or more medications above to build the sale.
-          </p>
+          <p className="empty empty--framed">{t('sell.empty')}</p>
         ) : (
           <>
             <div className="table-wrap">
               <table className="table">
-                <caption className="sr-only">
-                  Medications in the sale being built, with the lots each will be drawn from.
-                </caption>
+                <caption className="sr-only">{t('sell.currentCaption')}</caption>
                 <thead>
                   <tr>
-                    <th scope="col">Medication</th>
-                    <th scope="col" className="num">Quantity</th>
-                    <th scope="col">Drawn from (nearest expiry first)</th>
-                    <th scope="col" className="num">Line total</th>
-                    <th scope="col" className="actions">Actions</th>
+                    <th scope="col">{t('common.medication')}</th>
+                    <th scope="col" className="num">{t('common.quantity')}</th>
+                    <th scope="col">{t('sell.colDrawnFrom')}</th>
+                    <th scope="col" className="num">{t('sell.colLineTotal')}</th>
+                    <th scope="col" className="actions">{t('common.actions')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {items.map((item) => (
                     <tr key={item.medication_id}>
-                      <th scope="row" style={{ fontWeight: 500 }}>{item.medication_name}</th>
+                      <th scope="row" style={{ fontWeight: 500 }}><bdi>{item.medication_name}</bdi></th>
                       <td className="num">{item.quantity}</td>
                       <td>
                         <ul className="sale-preview__list">
                           {item.allocations.map((line) => (
                             <li key={line.batch_id}>
-                              <span className="num">{line.take}</span> from the lot expiring{' '}
-                              <span className="date">{formatDate(line.expiry_date)}</span>
+                              {lotLine(line)}
                               <span className="muted">
                                 {' '}
-                                — <span className="num">{line.remaining_after}</span> left afterwards
+                                {t('sell.leftAfter', { count: <span className="num">{line.remaining_after}</span> })}
                               </span>
                             </li>
                           ))}
                         </ul>
                       </td>
-                      <td className="num">{(item.unit_price * item.quantity).toFixed(2)}</td>
+                      <td className="num">{formatPrice(item.unit_price * item.quantity)}</td>
                       <td className="actions">
                         <button
                           type="button"
                           className="btn btn--sm btn--danger"
                           onClick={() => removeLine(item.medication_id)}
                         >
-                          Remove
+                          {t('common.remove')}
                         </button>
                       </td>
                     </tr>
@@ -271,11 +294,8 @@ export default function StaffSellPage() {
             </div>
 
             <div className="sale-total">
-              <span>
-                {items.length} medication{items.length === 1 ? '' : 's'} · {totalQuantity} unit
-                {totalQuantity === 1 ? '' : 's'}
-              </span>
-              <span className="sale-total__value">Total {totalPrice.toFixed(2)}</span>
+              <span>{summary(false)}</span>
+              <span className="sale-total__value">{t('common.total', { amount: formatPrice(totalPrice) })}</span>
             </div>
 
             <div className="form-actions">
@@ -285,10 +305,10 @@ export default function StaffSellPage() {
                 onClick={() => setConfirming(true)}
                 disabled={saving}
               >
-                Review and dispense
+                {t('sell.review')}
               </button>
               <button type="button" className="btn" onClick={() => setItems([])} disabled={saving}>
-                Clear sale
+                {t('sell.clear')}
               </button>
             </div>
           </>
@@ -297,27 +317,27 @@ export default function StaffSellPage() {
 
       <div className="card">
         <div className="card__header">
-          <h2>Recent sales</h2>
-          <span className="card__note">These feed the demand forecast.</span>
+          <h2>{t('sell.recent')}</h2>
+          <span className="card__note">{t('sell.recentNote')}</span>
         </div>
         {sales.length === 0 ? (
-          <p className="empty">No sales recorded yet.</p>
+          <p className="empty">{t('sell.noSales')}</p>
         ) : (
           <div className="table-wrap">
             <table className="table">
-              <caption className="sr-only">The most recent sales recorded at this pharmacy.</caption>
+              <caption className="sr-only">{t('sell.recentCaption')}</caption>
               <thead>
                 <tr>
-                  <th scope="col">Date</th>
-                  <th scope="col">Medication</th>
-                  <th scope="col" className="num">Quantity</th>
+                  <th scope="col">{t('sell.colDate')}</th>
+                  <th scope="col">{t('common.medication')}</th>
+                  <th scope="col" className="num">{t('common.quantity')}</th>
                 </tr>
               </thead>
               <tbody>
                 {sales.map((sale) => (
                   <tr key={sale.id}>
                     <td className="date">{formatDate(sale.date)}</td>
-                    <td>{sale.medication_name}</td>
+                    <td><bdi>{sale.medication_name}</bdi></td>
                     <td className="num">{sale.quantity_sold}</td>
                   </tr>
                 ))}
@@ -329,10 +349,10 @@ export default function StaffSellPage() {
 
       <ConfirmDialog
         open={confirming}
-        title="Dispense this sale?"
-        lead="Stock leaves the shelf now. This cannot be undone."
-        confirmLabel={`Dispense ${totalQuantity} unit${totalQuantity === 1 ? '' : 's'}`}
-        cancelLabel="Go back"
+        title={t('sell.confirmTitle')}
+        lead={t('sell.confirmLead')}
+        confirmLabel={t('sell.confirmButton', { count: totalQuantity })}
+        cancelLabel={t('sell.goBack')}
         busy={saving}
         onCancel={() => setConfirming(false)}
         onConfirm={handleSubmit}
@@ -341,11 +361,10 @@ export default function StaffSellPage() {
           {items.map((item) => (
             <li key={item.medication_id} className="modal__line">
               <span>
-                {item.medication_name}
+                <bdi>{item.medication_name}</bdi>
                 {item.allocations.map((line) => (
                   <span className="modal__lot" key={line.batch_id}>
-                    <span className="num">{line.take}</span> from the lot expiring{' '}
-                    <span className="date">{formatDate(line.expiry_date)}</span>
+                    {lotLine(line)}
                   </span>
                 ))}
               </span>
@@ -354,11 +373,8 @@ export default function StaffSellPage() {
           ))}
         </ul>
         <div className="sale-total" style={{ marginTop: 0, paddingTop: 0, borderTop: 0 }}>
-          <span>
-            {items.length} medication{items.length === 1 ? '' : 's'} ·{' '}
-            <span className="num">{totalQuantity}</span> unit{totalQuantity === 1 ? '' : 's'}
-          </span>
-          <span className="sale-total__value">Total {totalPrice.toFixed(2)}</span>
+          <span>{summary(true)}</span>
+          <span className="sale-total__value">{t('common.total', { amount: formatPrice(totalPrice) })}</span>
         </div>
       </ConfirmDialog>
     </>

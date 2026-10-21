@@ -11,6 +11,7 @@ const medicationBatchModel = require('../models/medicationBatchModel');
 const { validateMedication, validateNewMedication } = require('../validation/medicationValidation');
 const { withStockFlags } = require('../utils/stockFlags');
 const HttpError = require('../utils/httpError');
+const { ERROR_CODES } = require('../../../shared/constants.json');
 
 async function listMedications() {
   const rows = await medicationModel.findAll();
@@ -19,14 +20,14 @@ async function listMedications() {
 
 async function getMedication(id) {
   const medication = await medicationModel.findById(id);
-  if (!medication) throw new HttpError(404, 'Medication not found');
+  if (!medication) throw new HttpError(404, 'Medication not found', undefined, { code: ERROR_CODES.MEDICATION_NOT_FOUND });
   return withStockFlags(medication);
 }
 
 /** Creates the catalog entry and its opening stock lot in one transaction. */
 async function createMedication(body) {
   const { valid, errors, value, batch } = validateNewMedication(body);
-  if (!valid) throw new HttpError(400, 'Validation failed', errors);
+  if (!valid) throw new HttpError(400, 'Validation failed', errors, { code: ERROR_CODES.VALIDATION_FAILED });
 
   const conn = await pool.getConnection();
   let medicationId;
@@ -53,14 +54,14 @@ async function createMedication(body) {
 async function updateMedication(id, body) {
   await getMedication(id); // 404 if missing
   const { valid, errors, value } = validateMedication(body);
-  if (!valid) throw new HttpError(400, 'Validation failed', errors);
+  if (!valid) throw new HttpError(400, 'Validation failed', errors, { code: ERROR_CODES.VALIDATION_FAILED });
   await medicationModel.update(id, value);
   return getMedication(id);
 }
 
 async function deleteMedication(id) {
   const removed = await medicationModel.remove(id);
-  if (!removed) throw new HttpError(404, 'Medication not found');
+  if (!removed) throw new HttpError(404, 'Medication not found', undefined, { code: ERROR_CODES.MEDICATION_NOT_FOUND });
 }
 
 module.exports = {

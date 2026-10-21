@@ -3,6 +3,8 @@ import { fetchMedications } from '../../api/medications';
 import { fetchMedicationForecast } from '../../api/forecast';
 import DemandChart from '../../components/forecast/DemandChart';
 import StockProjectionChart from '../../components/forecast/StockProjectionChart';
+import { useI18n } from '../../i18n/I18nContext';
+import constants from '../../../../shared/constants.json';
 
 /**
  * Per-medication demand history and forecast (FR 6.1, UC-3).
@@ -11,6 +13,7 @@ import StockProjectionChart from '../../components/forecast/StockProjectionChart
  * numbers here include sales made since the last scheduled run.
  */
 export default function StaffForecastPage() {
+  const { t, te, lang } = useI18n();
   const [medications, setMedications] = useState([]);
   const [medicationId, setMedicationId] = useState('');
   const [forecast, setForecast] = useState(null);
@@ -21,7 +24,7 @@ export default function StaffForecastPage() {
   useEffect(() => {
     fetchMedications()
       .then((data) => setMedications(data.medications))
-      .catch((err) => setError(err.message))
+      .catch((err) => setError(err))
       .finally(() => setLoadingCatalog(false));
   }, []);
 
@@ -33,7 +36,7 @@ export default function StaffForecastPage() {
       const data = await fetchMedicationForecast(id);
       setForecast(data.forecast);
     } catch (err) {
-      setError(err.message);
+      setError(err);
     } finally {
       setLoadingForecast(false);
     }
@@ -45,27 +48,31 @@ export default function StaffForecastPage() {
     else setForecast(null);
   };
 
+  // The ML service explains a short history in English; Arabic gets our own sentence.
+  const insufficientReason =
+    lang === 'en' && forecast?.reason ? `${forecast.reason}.` : t('forecast.insufficientDefault');
+
   return (
     <>
       <div className="page-header">
-        <h1>Demand forecast</h1>
-        <div className="status-line">Pick a medication to train its model on the latest sales and chart the result</div>
+        <h1>{t('forecast.title')}</h1>
+        <div className="status-line">{t('forecast.subtitle')}</div>
       </div>
 
-      {error && <div className="alert alert--error" role="alert">{error}</div>}
+      {error && <div className="alert alert--error" role="alert">{te(error)}</div>}
 
       <div className="card">
-        <h2>Medication</h2>
+        <h2>{t('common.medication')}</h2>
         {loadingCatalog ? (
-          <p className="muted">Loading catalog...</p>
+          <p className="muted">{t('common.loadingCatalog')}</p>
         ) : (
           <label className="field">
-            <span className="field__label">Choose a medication to forecast</span>
+            <span className="field__label">{t('forecast.choose')}</span>
             <select value={medicationId} onChange={(e) => handleSelect(e.target.value)}>
-              <option value="">Select a medication...</option>
+              <option value="">{t('forecast.selectMedication')}</option>
               {medications.map((med) => (
                 <option key={med.id} value={med.id}>
-                  {med.name} — {med.quantity} in stock, reorder at {med.low_stock_threshold}
+                  {t('forecast.option', { name: med.name, quantity: med.quantity, threshold: med.low_stock_threshold })}
                 </option>
               ))}
             </select>
@@ -75,45 +82,45 @@ export default function StaffForecastPage() {
 
       {loadingForecast && (
         <div className="card">
-          <p className="muted">Training the model and forecasting...</p>
+          <p className="muted">{t('forecast.training')}</p>
         </div>
       )}
 
       {forecast && !loadingForecast && (
         <>
           <div className="card">
-            <h2>{forecast.medication.name}</h2>
+            <h2><bdi>{forecast.medication.name}</bdi></h2>
             <div className="stock-summary">
               <div>
-                <span className="field__label">In stock</span>
+                <span className="field__label">{t('common.inStock')}</span>
                 <strong>{forecast.medication.quantity}</strong>
               </div>
               <div>
-                <span className="field__label">Reorder at</span>
+                <span className="field__label">{t('common.reorderAt')}</span>
                 <strong>{forecast.medication.low_stock_threshold}</strong>
               </div>
               <div>
-                <span className="field__label">Days of history</span>
+                <span className="field__label">{t('forecast.historyDays')}</span>
                 <strong>{forecast.history_days}</strong>
               </div>
               <div>
-                <span className="field__label">Forecast</span>
+                <span className="field__label">{t('forecast.forecast')}</span>
                 {forecast.status === 'alert' ? (
                   <strong className="text-danger">
                     {forecast.days_until_threshold === 0
-                      ? 'Below threshold now'
-                      : `Below threshold in ${forecast.days_until_threshold} day${forecast.days_until_threshold === 1 ? '' : 's'}`}
+                      ? t('forecast.belowNow')
+                      : t('forecast.belowIn', { count: forecast.days_until_threshold })}
                   </strong>
                 ) : forecast.status === 'ok' ? (
-                  <strong>Stock holds for 7 days</strong>
+                  <strong>{t('forecast.holds', { count: constants.FORECAST_HORIZON_DAYS })}</strong>
                 ) : (
-                  <strong className="muted">Not enough data</strong>
+                  <strong className="muted">{t('forecast.notEnoughData')}</strong>
                 )}
               </div>
               {forecast.mae !== null && (
                 <div>
-                  <span className="field__label">Mean abs. error</span>
-                  <strong>{forecast.mae.toFixed(2)} units/day</strong>
+                  <span className="field__label">{t('forecast.mae')}</span>
+                  <strong>{t('forecast.maeValue', { value: forecast.mae.toFixed(2) })}</strong>
                 </div>
               )}
             </div>
@@ -121,30 +128,23 @@ export default function StaffForecastPage() {
 
           {forecast.status === 'insufficient_data' ? (
             <div className="card">
-              <h2>Sales history</h2>
+              <h2>{t('forecast.historyTitle')}</h2>
               <p className="empty">
-                {forecast.reason ? `${forecast.reason}.` : 'Not enough sales history to train a model yet.'} The model
-                needs at least 14 days of history before it will forecast, so no reorder alert is raised for this
-                medication (UC-3 alternative flow).
+                {insufficientReason} {t('forecast.insufficientNote')}
               </p>
               <DemandChart history={forecast.history} forecast={[]} />
             </div>
           ) : (
             <>
               <div className="card">
-                <h2>Daily demand</h2>
-                <p className="muted">
-                  Units sold per day over the last 30 days, then the model&apos;s predicted demand for the next{' '}
-                  {forecast.forecast.length} days.
-                </p>
+                <h2>{t('forecast.dailyDemand')}</h2>
+                <p className="muted">{t('forecast.dailyNote', { count: forecast.forecast.length })}</p>
                 <DemandChart history={forecast.history} forecast={forecast.forecast} />
               </div>
 
               <div className="card">
-                <h2>Projected stock</h2>
-                <p className="muted">
-                  Current stock less the predicted demand each day, against this medication&apos;s reorder threshold.
-                </p>
+                <h2>{t('forecast.projected')}</h2>
+                <p className="muted">{t('forecast.projectedNote')}</p>
                 <StockProjectionChart
                   currentQuantity={forecast.medication.quantity}
                   threshold={forecast.medication.low_stock_threshold}

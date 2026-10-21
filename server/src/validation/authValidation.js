@@ -3,8 +3,9 @@
  * { valid, errors, value } and never touch the database, which keeps them
  * easy to unit test.
  */
+const { PASSWORD_MIN_LENGTH } = require('../../../shared/constants.json');
+
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PASSWORD_MIN_LENGTH = 8;
 const NAME_MAX_LENGTH = 100;
 
 function normaliseEmail(email) {
