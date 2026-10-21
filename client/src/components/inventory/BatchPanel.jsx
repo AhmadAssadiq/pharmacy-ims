@@ -7,7 +7,8 @@ const EMPTY = { quantity: '', expiry_date: '', batch_number: '' };
 function toForm(batch) {
   return {
     quantity: String(batch.quantity),
-    expiry_date: formatDate(batch.expiry_date),
+    // A date input only accepts YYYY-MM-DD, never the display format.
+    expiry_date: String(batch.expiry_date).slice(0, 10),
     batch_number: batch.batch_number || '',
   };
 }
