@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { createMedication, fetchMedications } from '../../api/medications';
 import MedicationForm from '../../components/inventory/MedicationForm';
 import BatchPanel from '../../components/inventory/BatchPanel';
@@ -10,10 +11,13 @@ const NEW_MEDICATION = 'new';
  * Stock intake (FR 3.1, UC-1). One page for putting stock on the shelf: either
  * receive another lot of a medication the pharmacy already carries, or add a
  * medication the catalog does not have yet together with its first lot.
+ *
+ * The selection lives in the query string (`?medication=<id>`), so a reorder
+ * alert's "Receive stock" link opens the page with that medication chosen.
  */
 export default function StaffStockPage() {
   const [medications, setMedications] = useState([]);
-  const [target, setTarget] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -35,6 +39,10 @@ export default function StaffStockPage() {
     setNotice(message);
     setTimeout(() => setNotice(null), 4000);
   };
+
+  const target = searchParams.get('medication') ?? '';
+  const setTarget = (value) =>
+    setSearchParams(value ? { medication: value } : {}, { replace: true });
 
   const selected = medications.find((m) => String(m.id) === String(target));
 
