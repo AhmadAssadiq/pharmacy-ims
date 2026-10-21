@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/Layout';
 import AuthLayout from './components/AuthLayout';
@@ -22,37 +23,39 @@ function RootRedirect() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<RootRedirect />} />
-          <Route element={<AuthLayout />}>
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/register" element={<RegisterPage />} />
-          </Route>
-
-          {/* Staff portal (FR 2.1) */}
-          <Route element={<ProtectedRoute role={ROLES.STAFF} />}>
-            <Route element={<Layout />}>
-              <Route path="/staff/inventory" element={<StaffInventoryPage />} />
-              <Route path="/staff/stock" element={<StaffStockPage />} />
-              <Route path="/staff/sell" element={<StaffSellPage />} />
-              <Route path="/staff/forecast" element={<StaffForecastPage />} />
-              <Route path="/staff/chat" element={<StaffChatInboxPage />} />
+    <ThemeProvider>
+      <AuthProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<RootRedirect />} />
+            <Route element={<AuthLayout />}>
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/register" element={<RegisterPage />} />
             </Route>
-          </Route>
 
-          {/* Patient portal (FR 2.2) */}
-          <Route element={<ProtectedRoute role={ROLES.PATIENT} />}>
-            <Route element={<Layout />}>
-              <Route path="/patient/availability" element={<PatientAvailabilityPage />} />
-              <Route path="/patient/chat" element={<PatientChatPage />} />
+            {/* Staff portal (FR 2.1) */}
+            <Route element={<ProtectedRoute role={ROLES.STAFF} />}>
+              <Route element={<Layout />}>
+                <Route path="/staff/inventory" element={<StaffInventoryPage />} />
+                <Route path="/staff/stock" element={<StaffStockPage />} />
+                <Route path="/staff/sell" element={<StaffSellPage />} />
+                <Route path="/staff/forecast" element={<StaffForecastPage />} />
+                <Route path="/staff/chat" element={<StaffChatInboxPage />} />
+              </Route>
             </Route>
-          </Route>
 
-          <Route path="*" element={<RootRedirect />} />
-        </Routes>
-      </BrowserRouter>
-    </AuthProvider>
+            {/* Patient portal (FR 2.2) */}
+            <Route element={<ProtectedRoute role={ROLES.PATIENT} />}>
+              <Route element={<Layout />}>
+                <Route path="/patient/availability" element={<PatientAvailabilityPage />} />
+                <Route path="/patient/chat" element={<PatientChatPage />} />
+              </Route>
+            </Route>
+
+            <Route path="*" element={<RootRedirect />} />
+          </Routes>
+        </BrowserRouter>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }

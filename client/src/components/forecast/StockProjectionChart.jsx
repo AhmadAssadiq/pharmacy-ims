@@ -43,7 +43,7 @@ export default function StockProjectionChart({ currentQuantity, threshold, forec
               x2={WIDTH - PAD.right}
               y1={y(tick)}
               y2={y(tick)}
-              stroke="var(--color-border)"
+              stroke="var(--grid)"
               strokeWidth="1"
             />
             <text x={PAD.left - 6} y={y(tick) + 4} textAnchor="end" fontSize="10" fill="var(--color-muted)">

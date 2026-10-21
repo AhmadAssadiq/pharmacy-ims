@@ -2,6 +2,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { ROLES } from '../utils/routes';
 import Clock from './Clock';
+import ThemeToggle from './ThemeToggle';
 
 const STAFF_LINKS = [
   { to: '/staff/inventory', label: 'Inventory' },
@@ -16,12 +17,12 @@ const PATIENT_LINKS = [
   { to: '/patient/chat', label: 'Chat with pharmacy' },
 ];
 
-/** The product's mark: a dispensing cross, drawn rather than imported. */
+/** The product's mark: a dispensing cross, drawn in the chrome tokens so it follows the theme. */
 function Mark() {
   return (
     <svg className="topbar__mark" width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
-      <rect width="18" height="18" rx="4" fill="#141414" />
-      <path d="M6 9h6M9 6v6" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
+      <rect width="18" height="18" rx="4" fill="var(--accent)" />
+      <path d="M6 9h6M9 6v6" stroke="var(--on-accent)" strokeWidth="2" strokeLinecap="round" />
     </svg>
   );
 }
@@ -58,6 +59,7 @@ export default function Layout() {
         </nav>
         <div className="topbar__user">
           <Clock locale="en-GB" />
+          <ThemeToggle />
           <span className="topbar__who">
             <span>{user.name}</span>
             <span className="topbar__role">{isStaff ? 'Staff' : 'Patient'}</span>

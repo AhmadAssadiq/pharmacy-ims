@@ -19,6 +19,14 @@
   --border: #e3e5e9;
   --rule: #eef0f3;
   --control: #8a8f98;
+  --field: #ffffff;
+  --placeholder: #6b6b6b;
+
+  /* Interaction fills: hover, and the grey of a selected (pressed) control */
+  --hover-soft: #f6f7f9;
+  --row-hover: #fafbfc;
+  --selected: #e9e9e9;
+  --selected-border: #d2d2d2;
 
   /* Ink — three tiers, each ≥4.5:1 on both ground and surface */
   --text: #0a0a0a;
@@ -27,6 +35,8 @@
   /* Chrome carries no hue */
   --accent: #141414;
   --accent-hover: #2b2b2b;
+  --on-accent: #ffffff;
+  --link-hover: #000000;
 
   /* Status — the only colour on the screen */
   --positive: #2e7d32;
@@ -40,12 +50,21 @@
   --pill-warning-ink: #92400e;
   --pill-neutral-bg: #eef0f3;
   --pill-neutral-ink: #3d3d3d;
+  --danger-border: #e4b6b4;
+  --alert-negative-border: #f3cfcb;
+  --alert-positive-border: #bfe8cd;
+  --alert-warning-border: #fde68a;
 
   /* The one data hue */
   --chart-1: #141414;
   --chart-2: #8a8a8a;
   --chart-3: #1d5fbf;
   --grid: #e5e5e5;
+
+  /* The dialog is the one thing that floats */
+  --scrim: rgba(10, 10, 10, 0.45);
+  --shadow-dialog: 0 12px 32px rgba(0, 0, 0, 0.18);
+  --dialog-edge: transparent;
 
   /* Shape and space */
   --radius-card: 8px;
@@ -80,12 +99,139 @@
   --color-success-bg: var(--pill-positive-bg);
   --radius: var(--radius-card);
 
+  /* Native controls and scrollbars follow the theme. An explicit choice pins it. */
+  color-scheme: light dark;
+
   font-family: var(--font);
   font-size: var(--fs-body);
   color: var(--text);
   background: var(--ground);
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- Dark theme ----------
+   The same achromatic rules on a dark ground. Every token above has a
+   counterpart here; components read only tokens, so nothing else changes.
+   The block appears twice and the two copies must stay identical: once for an
+   explicit choice (data-theme="dark" on <html>) and once for "system", where
+   no data-theme is set and the OS preference decides. Contrast for every
+   text/background pair was measured: text >= 4.5:1, borders and marks >= 3:1. */
+:root[data-theme='light'] { color-scheme: light; }
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  /* Surfaces: a near-black ground, cards one step up, raised one more */
+  --ground: #0f1012;
+  --surface: #17191c;
+  --raised: #202226;
+  --border: #2c2f34;
+  --rule: #202226;
+  /* Same reasoning as light: the input's only boundary must clear 3:1.
+     4.6:1 on a card, 4.9:1 against the field's own fill. */
+  --control: #7d838c;
+  --field: #111214;
+  --placeholder: #93989f;
+
+  --hover-soft: #1d1f23;
+  --row-hover: #1b1d20;
+  --selected: #2b2e33;
+  --selected-border: #3d4047;
+
+  --text: #ececee;
+  --muted: #a2a7ae;
+
+  /* Chrome is still ink, inverted: the primary button is near-white. */
+  --accent: #ececee;
+  --accent-hover: #d2d4d8;
+  --on-accent: #0f1012;
+  --link-hover: #ffffff;
+
+  /* Status hues lifted so they read on a dark card. */
+  --positive: #5bbf6a;
+  --negative: #f2726c;
+  --warning: #e0a24a;
+  --pill-positive-bg: #12301c;
+  --pill-positive-ink: #a6e8b4;
+  --pill-negative-bg: #3b1618;
+  --pill-negative-ink: #ffb8b2;
+  --pill-warning-bg: #33260d;
+  --pill-warning-ink: #f4c977;
+  --pill-neutral-bg: #26292d;
+  --pill-neutral-ink: #cdd0d5;
+  --danger-border: #6b2b2c;
+  --alert-negative-border: #5c2326;
+  --alert-positive-border: #23502f;
+  --alert-warning-border: #5e4514;
+
+  --chart-1: #ececee;
+  --chart-2: #8d9299;
+  --chart-3: #6aa0ee;
+  --grid: #2a2d32;
+  --color-primary-dark: #8db8f3;
+
+  --scrim: rgba(0, 0, 0, 0.6);
+  --shadow-dialog: 0 12px 32px rgba(0, 0, 0, 0.55);
+  /* A shadow does not read on near-black, so the dialog gets an edge. */
+  --dialog-edge: #3a3d44;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    /* Surfaces: a near-black ground, cards one step up, raised one more */
+    --ground: #0f1012;
+    --surface: #17191c;
+    --raised: #202226;
+    --border: #2c2f34;
+    --rule: #202226;
+    /* Same reasoning as light: the input's only boundary must clear 3:1.
+       4.6:1 on a card, 4.9:1 against the field's own fill. */
+    --control: #7d838c;
+    --field: #111214;
+    --placeholder: #93989f;
+
+    --hover-soft: #1d1f23;
+    --row-hover: #1b1d20;
+    --selected: #2b2e33;
+    --selected-border: #3d4047;
+
+    --text: #ececee;
+    --muted: #a2a7ae;
+
+    /* Chrome is still ink, inverted: the primary button is near-white. */
+    --accent: #ececee;
+    --accent-hover: #d2d4d8;
+    --on-accent: #0f1012;
+    --link-hover: #ffffff;
+
+    /* Status hues lifted so they read on a dark card. */
+    --positive: #5bbf6a;
+    --negative: #f2726c;
+    --warning: #e0a24a;
+    --pill-positive-bg: #12301c;
+    --pill-positive-ink: #a6e8b4;
+    --pill-negative-bg: #3b1618;
+    --pill-negative-ink: #ffb8b2;
+    --pill-warning-bg: #33260d;
+    --pill-warning-ink: #f4c977;
+    --pill-neutral-bg: #26292d;
+    --pill-neutral-ink: #cdd0d5;
+    --danger-border: #6b2b2c;
+    --alert-negative-border: #5c2326;
+    --alert-positive-border: #23502f;
+    --alert-warning-border: #5e4514;
+
+    --chart-1: #ececee;
+    --chart-2: #8d9299;
+    --chart-3: #6aa0ee;
+    --grid: #2a2d32;
+    --color-primary-dark: #8db8f3;
+
+    --scrim: rgba(0, 0, 0, 0.6);
+    --shadow-dialog: 0 12px 32px rgba(0, 0, 0, 0.55);
+    /* A shadow does not read on near-black, so the dialog gets an edge. */
+    --dialog-edge: #3a3d44;
+  }
 }
 
 * { box-sizing: border-box; }
@@ -111,7 +257,7 @@ h4 { font-size: var(--fs-body); }
 p { margin: 0 0 0.75rem; }
 
 a { color: var(--text); text-underline-offset: 2px; }
-a:hover { color: #000; }
+a:hover { color: var(--link-hover); }
 
 .muted { color: var(--muted); }
 .num { font-variant-numeric: tabular-nums; }
@@ -135,12 +281,12 @@ a:hover { color: #000; }
   z-index: 100;
   padding: 10px 14px;
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   border-radius: var(--radius-control);
   font-weight: 500;
   text-decoration: none;
 }
-.skip-link:focus { top: 12px; color: #fff; }
+.skip-link:focus { top: 12px; color: var(--on-accent); }
 
 /* ---------- Shell ---------- */
 .app-shell { min-height: 100vh; display: flex; flex-direction: column; }
@@ -192,7 +338,7 @@ a:hover { color: #000; }
 }
 
 .topbar__link:hover { background: var(--raised); color: var(--text); }
-.topbar__link.active { background: #e9e9e9; color: var(--text); font-weight: 500; }
+.topbar__link.active { background: var(--selected); color: var(--text); font-weight: 500; }
 
 .topbar__user {
   margin-left: auto;
@@ -306,8 +452,8 @@ a:hover { color: #000; }
   cursor: pointer;
 }
 
-.kpi:hover { background: #f6f7f9; }
-.kpi[aria-pressed='true'] { background: #e9e9e9; }
+.kpi:hover { background: var(--hover-soft); }
+.kpi[aria-pressed='true'] { background: var(--selected); }
 
 .kpi:first-child { border-left: 0; }
 
@@ -381,8 +527,8 @@ a:hover { color: #000; }
 .chip:hover { border-color: var(--control); color: var(--text); }
 
 .chip[aria-pressed='true'] {
-  background: #e9e9e9;
-  border-color: #d2d2d2;
+  background: var(--selected);
+  border-color: var(--selected-border);
   color: var(--text);
   font-weight: 500;
 }
@@ -417,11 +563,11 @@ input, select, textarea {
   border-radius: var(--radius-control);
   font: inherit;
   font-size: var(--fs-body);
-  background: #fff;
+  background: var(--field);
   color: var(--text);
 }
 
-input::placeholder { color: #6b6b6b; }
+input::placeholder { color: var(--placeholder); }
 
 input:focus-visible, select:focus-visible, textarea:focus-visible {
   outline: 3px solid var(--chart-3);
@@ -466,30 +612,34 @@ input[aria-invalid='true'], select[aria-invalid='true'] { border-color: var(--ne
 
 .btn--primary {
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   border-color: var(--accent);
 }
-.btn--primary:hover { background: var(--accent-hover); color: #fff; }
+.btn--primary:hover { background: var(--accent-hover); color: var(--on-accent); }
 
 /* The commit button, and nothing else, carries this. */
 .btn--commit {
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   border-color: var(--accent);
   min-height: 44px;
   padding: 0 22px;
   font-weight: 600;
-  box-shadow: inset 0 0 0 3px #fff, inset 0 0 0 4px var(--accent);
+  box-shadow: inset 0 0 0 3px var(--surface), inset 0 0 0 4px var(--accent);
 }
-.btn--commit:hover { background: var(--accent-hover); color: #fff; }
+.btn--commit:hover { background: var(--accent-hover); color: var(--on-accent); }
 
-.btn--danger { color: var(--negative); border-color: #e4b6b4; }
+.btn--danger { color: var(--negative); border-color: var(--danger-border); }
 .btn--danger:hover { background: var(--pill-negative-bg); color: var(--negative); }
 
 .btn--ghost { border-color: transparent; background: transparent; }
 .btn--ghost:hover { background: var(--raised); }
 
 .btn--block { width: 100%; }
+
+/* Square icon-only button; its name comes from aria-label. */
+.btn--icon { width: var(--control-height); padding: 0; color: var(--muted); }
+.btn--icon:hover { color: var(--text); }
 
 /* Compact row buttons keep a 44px hit area through padding on touch. */
 .btn--sm { min-height: 30px; padding: 0 10px; font-size: var(--fs-small); }
@@ -509,9 +659,9 @@ input[aria-invalid='true'], select[aria-invalid='true'] { border-color: var(--ne
 
 .alert svg { flex: none; margin-top: 1px; }
 
-.alert--error { background: var(--pill-negative-bg); color: var(--pill-negative-ink); border-color: #f3cfcb; }
-.alert--success { background: var(--pill-positive-bg); color: var(--pill-positive-ink); border-color: #bfe8cd; }
-.alert--warning { background: var(--pill-warning-bg); color: var(--pill-warning-ink); border-color: #fde68a; }
+.alert--error { background: var(--pill-negative-bg); color: var(--pill-negative-ink); border-color: var(--alert-negative-border); }
+.alert--success { background: var(--pill-positive-bg); color: var(--pill-positive-ink); border-color: var(--alert-positive-border); }
+.alert--warning { background: var(--pill-warning-bg); color: var(--pill-warning-ink); border-color: var(--alert-warning-border); }
 
 /* ---------- Status marks: a glyph AND a word, never colour alone ---------- */
 .badge {
@@ -585,7 +735,7 @@ input[aria-invalid='true'], select[aria-invalid='true'] { border-color: var(--ne
 .table tr.is-flagged td:first-child { box-shadow: inset 3px 0 0 var(--warning); }
 .table tr.is-expired td:first-child { box-shadow: inset 3px 0 0 var(--negative); }
 
-.table tbody tr:hover td { background: #fafbfc; }
+.table tbody tr:hover td { background: var(--row-hover); }
 
 /* Sortable headers */
 .th-sort {
@@ -691,7 +841,7 @@ input[aria-invalid='true'], select[aria-invalid='true'] { border-color: var(--ne
 }
 
 .list__item--button:hover { background: var(--raised); }
-.list__item--button.is-active { background: #e9e9e9; }
+.list__item--button.is-active { background: var(--selected); }
 
 /* ---------- Reorder alerts ---------- */
 .alert-row {
@@ -762,7 +912,7 @@ input[aria-invalid='true'], select[aria-invalid='true'] { border-color: var(--ne
   align-items: center;
   justify-content: center;
   padding: 20px;
-  background: rgba(10, 10, 10, 0.45);
+  background: var(--scrim);
 }
 
 .modal {
@@ -774,7 +924,8 @@ input[aria-invalid='true'], select[aria-invalid='true'] { border-color: var(--ne
   border-radius: var(--radius-card);
   padding: var(--pad);
   /* A dialog is the one thing that genuinely floats. */
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+  border: 1px solid var(--dialog-edge);
+  box-shadow: var(--shadow-dialog);
 }
 
 .modal h2 { margin: 0 0 4px; }
@@ -833,7 +984,7 @@ input[aria-invalid='true'], select[aria-invalid='true'] { border-color: var(--ne
   overflow-wrap: anywhere;
 }
 
-.chat-bubble--mine { align-self: flex-end; background: var(--accent); color: #fff; }
+.chat-bubble--mine { align-self: flex-end; background: var(--accent); color: var(--on-accent); }
 .chat-bubble__meta { display: block; font-size: var(--fs-small); opacity: 0.8; margin-top: 3px; }
 
 .chat-window__form { display: flex; gap: 8px; margin-top: 12px; }

@@ -50,7 +50,7 @@ export default function DemandChart({ history, forecast, historyDays = 30 }) {
               x2={WIDTH - PAD.right}
               y1={y(tick)}
               y2={y(tick)}
-              stroke="var(--color-border)"
+              stroke="var(--grid)"
               strokeWidth="1"
             />
             <text x={PAD.left - 6} y={y(tick) + 4} textAnchor="end" fontSize="10" fill="var(--color-muted)">
@@ -66,8 +66,7 @@ export default function DemandChart({ history, forecast, historyDays = 30 }) {
             y={y(bar.value)}
             width={barWidth}
             height={Math.max(baseline - y(bar.value), 0)}
-            fill={bar.predicted ? 'var(--color-warning)' : 'var(--color-primary)'}
-            opacity={bar.predicted ? 0.8 : 1}
+            fill={bar.predicted ? 'var(--chart-2)' : 'var(--color-primary)'}
           >
             <title>{`${bar.date}: ${bar.value} units${bar.predicted ? ' (predicted)' : ''}`}</title>
           </rect>
