@@ -92,7 +92,10 @@ Edit `server/.env` and set at least `DB_PASSWORD` (if your MySQL root has one) a
 | Variable | Default | Purpose |
 |---|---|---|
 | `PORT`, `DB_*`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `CLIENT_ORIGIN`, `ML_SERVICE_URL`, `FORECAST_CRON` | see `.env.example` | as before |
-| `AUTH_RESET_DEBUG` | `false` | `true` prints password reset links to the server console (development only; ignored when `NODE_ENV=production`). There is no mail service yet - see "Password reset" |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` | empty, `587` | outgoing email for password reset links; leave `SMTP_HOST` empty and no email is sent - see "Password reset" |
+| `SMTP_SECURE` | `true` on port 465 | TLS from the first byte (465); otherwise STARTTLS is used (587) |
+| `SMTP_REQUIRE_TLS` | `true` | `false` only for a local mail catcher such as Mailpit; never sends a password without TLS otherwise |
+| `AUTH_RESET_DEBUG` | `false` | `true` also prints password reset links to the server console (development only; ignored when `NODE_ENV=production`) |
 | `UPLOADS_DIR` | `server/uploads` | where chat images are stored; created at start-up, git-ignored |
 | `NODE_ENV` | `development` | set to `production` in production |
 
@@ -120,7 +123,9 @@ whether they are needed and are safe to re-run. **An existing database upgrades 
 - one chat session per patient: merges duplicate sessions (moving their messages), then adds a
   unique key on `chat_sessions.patient_id`;
 - image attachments: adds `attachment_path`, `attachment_mime`, `attachment_size`,
-  `attachment_name` (and a unique key on the path) to `chat_messages`.
+  `attachment_name` (and a unique key on the path) to `chat_messages`;
+- phone numbers: adds `users.phone`. `npm run db:seed` gives the existing demo patient its
+  (fictional) number; other existing patients are asked to add one when they sign in.
 
 New tables need nothing special: `CREATE TABLE IF NOT EXISTS` adds them. To start from a clean
 slate (seed data goes stale after a few weeks):
@@ -175,7 +180,7 @@ and a Contact link.
 
 | Command | What it does |
 |---|---|
-| `npm test` | Runs the unit tests (92): validation, lockout, roles, stock flags, FEFO, preorders, reset tokens, rate limiter, presence, image sniffing, account deletion, the i18n dictionaries and the translator |
+| `npm test` | Runs the unit tests (101): validation, lockout, roles, stock flags, FEFO, preorders, reset tokens, rate limiter, SMTP, presence, image sniffing, account deletion, the i18n dictionaries and the translator |
 | `npm run db:reset` | Drops, migrates and re-seeds the database (needed after a schema change) |
 | `npm run forecast -w server` | Runs the ML forecast / reorder-alert check once and prints the result |
 | `npm run build -w client` | Production build of the React app into `client/dist` |
@@ -201,8 +206,9 @@ and a Contact link.
 | Live clock (GP2 addition) | `client/src/components/Clock.jsx` |
 | Dark mode (GP2 addition) | `client/src/context/ThemeContext.jsx`, `ThemeToggle.jsx`, dark token set in `styles.css`, pre-paint script in `client/index.html` |
 | Arabic / RTL (GP2 addition) | `client/src/i18n/`, `LanguageToggle.jsx`, logical CSS properties, error `code`s from `server/src/utils/httpError.js` |
-| Preorders (GP2 addition) | `server/src/services/preorderService.js` (collect = FEFO dispense in one transaction), `PatientAvailabilityPage.jsx`, `StaffPreordersPage.jsx` |
-| Forgot password (GP2 addition) | `server/src/services/passwordResetService.js`, `utils/resetToken.js`, `ForgotPasswordPage.jsx`, `ResetPasswordPage.jsx` |
+| Preorders (GP2 addition) | `server/src/services/preorderService.js` (ready = record the delivered lot into stock; collect = FEFO dispense; each in one transaction), `PatientAvailabilityPage.jsx`, `StaffPreordersPage.jsx` |
+| Patient phone numbers (GP2 addition) | `normalisePhone` in `server/src/validation/authValidation.js`, `RegisterPage.jsx`, `PatientAccountPage.jsx`, `PhoneLink.jsx` (staff inbox and preorder queue) |
+| Forgot password (GP2 addition) | `server/src/services/passwordResetService.js`, `utils/resetToken.js`, `services/mailService.js`, `utils/smtp.js`, `ForgotPasswordPage.jsx`, `ResetPasswordPage.jsx` |
 | Online status (GP2 addition) | `server/src/ws/presence.js`, `chatHub.js`; `ChatWindow.jsx` (`PresenceMark`) |
 | Image messages (GP2 addition) | `server/src/utils/imageSniff.js`, `uploadStore.js`, `chatService.sendImage`; `ChatWindow.jsx`, `ChatImage.jsx` |
 | Delete account (GP2 addition) | `authService.deleteOwnAccount`, `middleware/authenticate.js` (user must still exist), `PatientAccountPage.jsx` |
@@ -250,11 +256,12 @@ require `Authorization: Bearer <jwt>` for a user that still exists. Errors are
 
 | Method | Path | Role | Purpose |
 |---|---|---|---|
-| POST | `/auth/register` | public | create a patient account |
+| POST | `/auth/register` | public | create a patient account `{ name, email, phone, password }` (phone required) |
 | POST | `/auth/login` | public | sign in (locks after 5 failures) |
 | GET | `/auth/me` | any | current user |
 | DELETE | `/auth/me` | patient | delete your own account `{ password }`; staff get 403 |
-| POST | `/auth/forgot-password` | public | `{ email }`; always the same 200 answer (rate limited) |
+| PUT | `/auth/me/phone` | any | add or change your phone number `{ phone }` |
+| POST | `/auth/forgot-password` | public | `{ email, lang? }`; emails the link in `en` or `ar`; always the same 200 answer (rate limited) |
 | POST | `/auth/reset-password` | public | `{ token, password }` (rate limited) |
 | GET/POST | `/medications` | staff | list / add medication (adding also creates its opening stock lot) |
 | GET/PUT/DELETE | `/medications/:id` | staff | read / update catalog fields / delete |
@@ -271,11 +278,11 @@ require `Authorization: Bearer <jwt>` for a user that still exists. Errors are
 | POST | `/chat/sessions/:id/messages` | participant | send (HTTP fallback; also pushed over WebSocket) |
 | POST | `/chat/sessions/:id/attachments` | participant | multipart: `image` (PNG/JPEG/WebP/GIF, max 5 MB) + optional `caption` |
 | GET | `/chat/attachments/:key` | participant | the image, after re-checking access |
-| POST | `/preorders` | patient | request an out-of-stock medication `{ medication_id, quantity, note? }` |
+| POST | `/preorders` | patient | request an out-of-stock medication `{ medication_id, quantity, note? }`; needs a phone number on the account |
 | GET | `/preorders/mine` | patient | your own requests |
 | POST | `/preorders/:id/cancel` | patient | cancel your own pending request |
 | GET | `/preorders` | staff | all requests, newest first, `?status=` optional |
-| PATCH | `/preorders/:id` | staff | `{ status }`: pending -> ready / cancelled, ready -> collected / cancelled |
+| PATCH | `/preorders/:id` | staff | `{ status, delivery? }`: pending -> ready / cancelled, ready -> collected / cancelled. With "ready", `delivery: { quantity, expiry_date, batch_number? }` adds that lot to stock (at least the requested quantity, expiring after today) |
 | GET | `/availability` | any | in-stock / out-of-stock list |
 | WS | `/ws?token=<jwt>` | any | real-time chat channel, plus `presence` frames |
 
@@ -293,12 +300,36 @@ only when Arabic is chosen.
 **Password reset.** `POST /auth/forgot-password` answers identically for any email and issues
 the token after the response, so neither the body nor the timing reveals which emails have
 accounts. A link holds a 32-byte random token; only its SHA-256 is stored, it works once, for 15
-minutes, and a newer link retires older ones. **There is no mail service.** For local testing
-set `AUTH_RESET_DEBUG=true` in `server/.env` and the link appears in the server console.
-**Before production, add an SMTP server or a mail provider's API** at the `TODO(production)` in
-`server/src/services/passwordResetService.js`; until then nobody receives a reset link. Both
-endpoints are rate limited in memory per IP (and per email for forgot-password); behind a
-reverse proxy, set Express's `trust proxy` so the limiter sees client addresses.
+minutes, and a newer link retires older ones. Both endpoints are rate limited in memory per IP
+(and per email for forgot-password); behind a reverse proxy, set Express's `trust proxy` so the
+limiter sees client addresses.
+
+The link is emailed, in the language the patient was using, by a small SMTP client built on
+Node's own `tls` module (`server/src/utils/smtp.js`; no mail package). **Email is only sent once
+SMTP is set up in `server/.env`**; until then the server logs "SMTP is not configured" once and
+nobody receives a link. With Gmail:
+
+1. Turn on 2-step verification for the Google account, then create an App Password
+   (Google Account > Security > App passwords).
+2. In `server/.env` set `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=587`, `SMTP_USER=` the address,
+   `SMTP_PASS=` the 16-character app password, and `MAIL_FROM=Pharmacy IMS <the address>`.
+3. Restart the API (`npm run dev`).
+
+Any other SMTP provider works the same way (port 465 or 587). For local testing without a real
+account, run a mail catcher such as Mailpit and set `SMTP_HOST=localhost`, `SMTP_PORT=1025`,
+`SMTP_REQUIRE_TLS=false`, or set `AUTH_RESET_DEBUG=true` to print links to the console.
+
+**Phone numbers.** Every patient who registers gives one (8 to 15 digits; spaces, dashes and
+brackets are ignored, `00` becomes `+`). Patients from before phone numbers were required see a
+banner asking for one and cannot request a preorder until they add it on their account page.
+Staff see the number, as a tap-to-call link, in the chat inbox and on the preorder queue;
+patients never see each other's.
+
+**Preorders and stock.** "Mark ready" records the delivery that came in for the request: staff
+enter the lot (quantity, expiry, lot number) and it is added to stock in the same transaction,
+so Inventory shows it straight away. If the stock was received through Add stock instead, staff
+choose "already in stock" so it is not counted twice. Nothing is reserved: until the patient
+collects, Dispense can sell those units like any others, and collecting then answers 409.
 
 **Online status.** Presence is in memory only (`server/src/ws/presence.js`): nothing is written
 to the database on connect or disconnect, it resets when the server restarts, and there is

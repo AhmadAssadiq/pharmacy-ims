@@ -25,6 +25,19 @@ const env = {
   // Chat images live on disk here, never in the database and never served
   // statically (see services/attachmentService.js). Default: server/uploads.
   uploadsDir: path.resolve(process.env.UPLOADS_DIR || path.join(__dirname, '../../uploads')),
+  // Outgoing mail (password reset). Unset SMTP_HOST means no mail is sent.
+  smtp: {
+    host: process.env.SMTP_HOST || '',
+    port: Number(process.env.SMTP_PORT) || 587,
+    // 465 is TLS from the first byte; 587 upgrades with STARTTLS.
+    secure: process.env.SMTP_SECURE ? process.env.SMTP_SECURE === 'true' : Number(process.env.SMTP_PORT) === 465,
+    user: process.env.SMTP_USER || '',
+    pass: process.env.SMTP_PASS || '',
+    // Only a local mail catcher (Mailpit, MailHog) should ever need false.
+    requireTLS: process.env.SMTP_REQUIRE_TLS !== 'false',
+    timeoutMs: Number(process.env.SMTP_TIMEOUT_MS) || 15000,
+  },
+  mailFrom: process.env.MAIL_FROM || '',
 };
 
 module.exports = env;

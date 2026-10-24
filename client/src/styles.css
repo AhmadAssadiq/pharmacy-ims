@@ -376,6 +376,13 @@ a:hover { color: var(--link-hover); }
 .topbar__role { font-size: var(--fs-small); color: var(--muted); }
 .topbar__who--link { text-decoration: none; color: var(--text); border-radius: var(--radius-control); padding: 2px 6px; margin: -2px -6px; }
 .topbar__who--link:hover { background: var(--raised); }
+.phone-banner { margin-bottom: var(--gap); }
+
+/* Recording a preorder's delivery inside the "Mark ready" dialog. */
+.delivery { border: 0; margin: 0 0 12px; padding: 0; display: grid; gap: 8px; }
+.delivery__choice { display: flex; align-items: center; gap: 8px; font-weight: 500; }
+.delivery__choice input { width: auto; min-height: 0; }
+.delivery__fields { margin-inline-start: 26px; }
 .topbar__who--link:hover .topbar__role { text-decoration: underline; }
 
 /* The one destructive card: the edge is the status hue, the rest stays ink. */
@@ -1132,6 +1139,8 @@ input[aria-invalid='true'], select[aria-invalid='true'] { border-color: var(--ne
   align-items: center;
   justify-content: center;
   padding: 20px;
+  /* Room for the language / theme bar above, so a tall card never slides under it. */
+  padding-block-start: 64px;
 }
 
 .auth-card { width: 100%; max-width: 400px; }

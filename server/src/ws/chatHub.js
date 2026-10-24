@@ -125,6 +125,9 @@ function attachChatHub(httpServer) {
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
 
   wss.on('connection', async (ws, req) => {
+    // Alive from the start: the heartbeat must not terminate a socket that is
+    // still waiting on the user lookup below.
+    ws.isAlive = true;
     const user = await authenticateUpgrade(req).catch(() => null);
     if (!user) {
       ws.close(4401, 'Authentication required');
@@ -134,7 +137,6 @@ function attachChatHub(httpServer) {
     if (ws.readyState !== ws.OPEN) return;
 
     ws.user = user;
-    ws.isAlive = true;
     join(ws);
     send(ws, { type: 'ready', user, presence: presenceSnapshot(user) });
 

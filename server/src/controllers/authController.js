@@ -38,4 +38,9 @@ const deleteMe = asyncHandler(async (req, res) => {
   res.status(204).end();
 });
 
-module.exports = { register, login, me, forgotPassword, resetPassword, deleteMe };
+/** Adds or changes the signed-in user's phone number. */
+const updatePhone = asyncHandler(async (req, res) => {
+  res.json({ user: await authService.updateOwnPhone(req.user, req.body) });
+});
+
+module.exports = { register, login, me, forgotPassword, resetPassword, deleteMe, updatePhone };

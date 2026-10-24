@@ -45,7 +45,7 @@ async function assignStaff(id, staffId) {
  */
 async function findAllWithSummary() {
   const [rows] = await pool.execute(
-    `SELECT s.id, s.patient_id, p.name AS patient_name, s.staff_id, st.name AS staff_name,
+    `SELECT s.id, s.patient_id, p.name AS patient_name, p.phone AS patient_phone, s.staff_id, st.name AS staff_name,
             s.created_at,
             m.content   AS last_message,
             m.attachment_mime IS NOT NULL AS last_message_has_image,

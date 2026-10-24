@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { deleteAccountRequest } from '../../api/auth';
+import { deleteAccountRequest, updatePhoneRequest } from '../../api/auth';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import { useAuth } from '../../context/AuthContext';
 import { useI18n } from '../../i18n/I18nContext';
+import { normalisePhone } from '../../utils/phone';
 
 /**
  * The patient's account (GP2 addition): who they are signed in as, and the
@@ -12,7 +13,7 @@ import { useI18n } from '../../i18n/I18nContext';
  * Afterwards the session is cleared and the patient lands on the login page.
  */
 export default function PatientAccountPage() {
-  const { user, logout } = useAuth();
+  const { user, logout, updateUser } = useAuth();
   const { t, te } = useI18n();
   const navigate = useNavigate();
   const [password, setPassword] = useState('');
@@ -20,6 +21,32 @@ export default function PatientAccountPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const errorRef = useRef(null);
+  const [phone, setPhone] = useState(user.phone ?? '');
+  const [phoneError, setPhoneError] = useState(null);
+  const [phoneNotice, setPhoneNotice] = useState(null);
+  const [savingPhone, setSavingPhone] = useState(false);
+
+  const handlePhone = async (e) => {
+    e.preventDefault();
+    setPhoneError(null);
+    setPhoneNotice(null);
+    const check = normalisePhone(phone);
+    if (check.error) {
+      setPhoneError(t(`phone.${check.error}`));
+      return;
+    }
+    setSavingPhone(true);
+    try {
+      const { user: updated } = await updatePhoneRequest(check.value);
+      updateUser(updated);
+      setPhone(updated.phone);
+      setPhoneNotice(t('phone.saved'));
+    } catch (err) {
+      setPhoneError(err.details?.phone ?? te(err));
+    } finally {
+      setSavingPhone(false);
+    }
+  };
 
   useEffect(() => {
     if (error) errorRef.current?.focus();
@@ -68,6 +95,34 @@ export default function PatientAccountPage() {
           </div>
         </div>
       </section>
+
+      <form className="card" id="phone" onSubmit={handlePhone} aria-labelledby="phone-heading">
+        <h2 id="phone-heading">{t('phone.title')}</h2>
+        <p className="muted">{t('phone.why')}</p>
+        {phoneNotice && <div className="alert alert--success" role="status">{phoneNotice}</div>}
+        <div className="form-grid">
+          <label className="field">
+            <span className="field__label">{t('phone.label')}</span>
+            <input
+              type="tel"
+              dir="ltr"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              autoComplete="tel"
+              required
+              aria-invalid={phoneError ? 'true' : undefined}
+              aria-describedby="account-phone-hint"
+            />
+            <span className="field__hint" id="account-phone-hint">{t('phone.hint')}</span>
+            {phoneError && <span className="field__error" role="alert">{phoneError}</span>}
+          </label>
+        </div>
+        <div className="form-actions">
+          <button type="submit" className="btn btn--primary" disabled={savingPhone}>
+            {savingPhone ? t('common.saving') : t('phone.save')}
+          </button>
+        </div>
+      </form>
 
       <form className="card card--danger" onSubmit={handleRequest} aria-labelledby="delete-account">
         <h2 id="delete-account">{t('account.deleteTitle')}</h2>

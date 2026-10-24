@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { fetchMessages, fetchSessions, postImage, postMessage } from '../../api/chat';
 import ChatWindow, { PresenceMark } from '../../components/chat/ChatWindow';
+import PhoneLink from '../../components/PhoneLink';
 import { useAuth } from '../../context/AuthContext';
 import useChatSocket from '../../hooks/useChatSocket';
 import { useI18n } from '../../i18n/I18nContext';
@@ -77,6 +78,7 @@ export default function StaffChatInboxPage() {
         const updated = {
           ...(existing || { id: session.id, patient_id: session.patient_id, created_at: session.created_at }),
           patient_name: session.patient_name,
+          patient_phone: session.patient_phone ?? existing?.patient_phone ?? null,
           staff_id: session.staff_id,
           last_message: message.content,
           last_message_has_image: Boolean(message.attachment),
@@ -160,7 +162,13 @@ export default function StaffChatInboxPage() {
         {selected ? (
           <ChatWindow
             title={selected.patient_name}
-            subtitle={selected.staff_id ? t('chat.assigned') : t('chat.unassigned')}
+            subtitle={
+              <>
+                {selected.staff_id ? t('chat.assigned') : t('chat.unassigned')}
+                {' · '}
+                <PhoneLink phone={selected.patient_phone} />
+              </>
+            }
             presence={{
               online: isOnline(selected.patient_id),
               label: isOnline(selected.patient_id) ? t('presence.patientOnline') : t('presence.patientOffline'),

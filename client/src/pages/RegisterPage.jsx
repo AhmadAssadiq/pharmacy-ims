@@ -3,6 +3,7 @@ import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useI18n } from '../i18n/I18nContext';
 import { homePathForRole } from '../utils/routes';
+import { normalisePhone } from '../utils/phone';
 import constants from '../../../shared/constants.json';
 
 const { PASSWORD_MIN_LENGTH } = constants;
@@ -11,7 +12,7 @@ export default function RegisterPage() {
   const { user, register } = useAuth();
   const { t, te } = useI18n();
   const navigate = useNavigate();
-  const [form, setForm] = useState({ name: '', email: '', password: '' });
+  const [form, setForm] = useState({ name: '', email: '', phone: '', password: '' });
   const [error, setError] = useState(null);
   const [fieldErrors, setFieldErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
@@ -33,6 +34,11 @@ export default function RegisterPage() {
     if (submitting) return;
     setError(null);
     setFieldErrors({});
+    const phone = normalisePhone(form.phone);
+    if (phone.error) {
+      setFieldErrors({ phone: t(`phone.${phone.error}`) });
+      return;
+    }
     setSubmitting(true);
     try {
       const created = await register(form);
@@ -65,6 +71,22 @@ export default function RegisterPage() {
         <span className="field__label">{t('auth.email')}</span>
         <input name="email" type="email" dir="ltr" value={form.email} onChange={handleChange} required autoComplete="email" />
         {fieldErrors.email && <span className="field__error">{fieldErrors.email}</span>}
+      </label>
+      <label className="field">
+        <span className="field__label">{t('phone.label')}</span>
+        <input
+          name="phone"
+          type="tel"
+          dir="ltr"
+          value={form.phone}
+          onChange={handleChange}
+          required
+          autoComplete="tel"
+          aria-describedby="phone-hint"
+          aria-invalid={fieldErrors.phone ? 'true' : undefined}
+        />
+        <span className="field__hint" id="phone-hint">{t('phone.hint')}</span>
+        {fieldErrors.phone && <span className="field__error">{fieldErrors.phone}</span>}
       </label>
       <label className="field">
         <span className="field__label">{t('auth.passwordHint', { count: PASSWORD_MIN_LENGTH })}</span>

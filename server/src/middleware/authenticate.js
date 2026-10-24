@@ -35,7 +35,7 @@ function createAuthenticate({ findUser = userModel.findById } = {}) {
     try {
       const user = await findUser(claims.id);
       if (!user) return next(invalidToken());
-      req.user = { id: user.id, name: user.name, email: user.email, role: user.role };
+      req.user = { id: user.id, name: user.name, email: user.email, phone: user.phone ?? null, role: user.role };
       return next();
     } catch (err) {
       return next(err);

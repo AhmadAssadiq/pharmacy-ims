@@ -5,4 +5,6 @@ export const fetchMyPreorders = () => request('/preorders/mine');
 export const cancelMyPreorder = (id) => request(`/preorders/${id}/cancel`, { method: 'POST' });
 
 export const fetchPreorders = () => request('/preorders');
-export const updatePreorderStatus = (id, status) => request(`/preorders/${id}`, { method: 'PATCH', body: { status } });
+/** `delivery` ({ quantity, expiry_date, batch_number }) goes with "ready": the lot that arrived for the request. */
+export const updatePreorderStatus = (id, status, delivery) =>
+  request(`/preorders/${id}`, { method: 'PATCH', body: delivery ? { status, delivery } : { status } });

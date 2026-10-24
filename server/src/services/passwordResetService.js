@@ -11,8 +11,10 @@
  *   the user in: they go back to the login page.
  * - Both endpoints are rate limited per IP, and asking for a link per email too.
  *
- * There is no mail service. With AUTH_RESET_DEBUG=true outside production the
- * link is printed to the server console; otherwise nobody receives it.
+ * The link is emailed through mailService (SMTP settings in server/.env), in
+ * the language the request came from. Without SMTP settings nothing is sent
+ * and a warning is logged once. With AUTH_RESET_DEBUG=true outside production
+ * the link is also printed to the server console.
  */
 const bcrypt = require('bcryptjs');
 const pool = require('../config/db');
@@ -20,6 +22,7 @@ const env = require('../config/env');
 const userModel = require('../models/userModel');
 const passwordResetModel = require('../models/passwordResetModel');
 const { BCRYPT_ROUNDS } = require('./authService');
+const mailService = require('./mailService');
 const { defaultTracker } = require('./loginAttemptService');
 const { createRateLimiter } = require('./rateLimitService');
 const { generateToken, hashToken, tokenState } = require('../utils/resetToken');
@@ -49,8 +52,40 @@ function limit(limiter, key) {
 const invalidLink = () =>
   new HttpError(400, 'This reset link is invalid or has expired', undefined, { code: ERROR_CODES.RESET_TOKEN_INVALID });
 
+/** The reset email, in English or Arabic. Plain text, so it reads the same everywhere. */
+function resetEmail(lang, { name, link, minutes }) {
+  if (lang === 'ar') {
+    return {
+      subject: 'إعادة تعيين كلمة المرور - Pharmacy IMS',
+      text: [
+        `مرحبًا ${name}،`,
+        '',
+        'طلب أحدهم إعادة تعيين كلمة المرور لحسابك. لاختيار كلمة مرور جديدة، افتح هذا الرابط:',
+        '',
+        link,
+        '',
+        `يعمل الرابط مرة واحدة وتنتهي صلاحيته خلال ${minutes} دقيقة.`,
+        'إذا لم تطلب ذلك، فتجاهل هذه الرسالة؛ لن تتغير كلمة المرور.',
+      ].join('\n'),
+    };
+  }
+  return {
+    subject: 'Reset your Pharmacy IMS password',
+    text: [
+      `Hello ${name},`,
+      '',
+      'Someone asked to reset the password for your account. To choose a new one, open this link:',
+      '',
+      link,
+      '',
+      `The link works once and expires in ${minutes} minutes.`,
+      'If this was not you, ignore this email; your password stays the same.',
+    ].join('\n'),
+  };
+}
+
 /** Issues a token for `email` if it has an account. Runs after the response is decided. */
-async function issueResetToken(email) {
+async function issueResetToken(email, lang = 'en') {
   const user = await userModel.findByEmail(email);
   if (!user) return;
 
@@ -69,11 +104,16 @@ async function issueResetToken(email) {
   }
 
   const link = `${env.clientOrigin}/reset-password?token=${token}`;
-  // TODO(production): send `link` to `email` through an SMTP server or a mail
-  // provider's API. Until then a real user never receives it.
   if (env.authResetDebug && env.nodeEnv !== 'production') {
     console.log(`[password reset] link for ${email} (valid ${PASSWORD_RESET_MINUTES} min): ${link}`);
   }
+
+  if (!mailService.isConfigured()) {
+    mailService.warnNotConfigured();
+    return;
+  }
+  const { subject, text } = resetEmail(lang, { name: user.name, link, minutes: PASSWORD_RESET_MINUTES });
+  await mailService.sendMail({ to: email, subject, text });
 }
 
 async function requestPasswordReset(body, { ip } = {}) {
@@ -84,7 +124,9 @@ async function requestPasswordReset(body, { ip } = {}) {
   limit(limiters.forgotByEmail, `email:${value.email}`);
 
   // Not awaited: an existing account must not answer more slowly than an unknown one.
-  issueResetToken(value.email).catch((err) => console.error('Password reset token could not be issued:', err));
+  issueResetToken(value.email, value.lang).catch((err) =>
+    console.error('Password reset email could not be sent:', err.message)
+  );
 
   return { message: 'If an account exists for that email, a reset link has been sent.' };
 }
@@ -121,4 +163,4 @@ async function resetPassword(body, { ip, tracker = defaultTracker } = {}) {
   return { message: 'Password updated. Sign in with your new password.' };
 }
 
-module.exports = { requestPasswordReset, resetPassword, issueResetToken };
+module.exports = { requestPasswordReset, resetPassword, issueResetToken, resetEmail };

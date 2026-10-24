@@ -28,9 +28,9 @@ const list = asyncHandler(async (req, res) => {
   res.json({ preorders: await preorderService.listAll(req.query) });
 });
 
-/** Staff: move a request to its next status. */
+/** Staff: move a request to its next status, recording its delivery when it is marked ready. */
 const updateStatus = asyncHandler(async (req, res) => {
-  res.json({ preorder: await preorderService.updateStatus(parseId(req.params.id), req.body) });
+  res.json(await preorderService.updateStatus(parseId(req.params.id), req.body));
 });
 
 module.exports = { create, listMine, cancel, list, updateStatus };

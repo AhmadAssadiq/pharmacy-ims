@@ -92,13 +92,13 @@
       "other": "{count} medications are at or below their reorder level."
     },
     "findingExpiring": {
-      "one": "{count} lot expires within {days} days. Nothing is below its reorder level.",
-      "other": "{count} lots expire within {days} days. Nothing is below its reorder level."
+      "one": "{count} medication has a lot expiring within {days} days. Nothing is below its reorder level.",
+      "other": "{count} medications have a lot expiring within {days} days. Nothing is below its reorder level."
     },
     "findingClear": "Every medication is above its reorder level with no lot expiring within {days} days.",
     "kpiAll": "Medications",
     "kpiLow": "At or below reorder level",
-    "kpiExpiring": "Lots expiring within {days} days",
+    "kpiExpiring": "Expiring within {days} days",
     "kpiExpired": "Holding expired stock",
     "stockOnHand": "Stock on hand",
     "stockNote": "Quantities exclude expired lots, which cannot be dispensed.",
@@ -352,9 +352,17 @@
     "colPatient": "Patient",
     "colNote": "Note",
     "markReady": "Mark ready",
+    "readyTitle": "Mark this request ready?",
+    "readyLead": "{quantity} × {name} for {patient}. Record the delivery that came in for it, so it is added to stock.",
+    "deliveryLegend": "How the stock for this request arrived",
+    "deliveryRecord": "Record the delivery now (adds it to stock)",
+    "deliveryOnShelf": "It is already in stock (received through Add stock)",
+    "deliveryQuantityError": "Enter a whole number of at least {count}, the quantity requested.",
+    "deliveryExpiryError": "Enter an expiry date after today, so the patient can still collect it.",
     "markCollected": "Mark collected",
     "moved": {
       "ready": "{name} for {patient} is marked ready to collect.",
+      "readyDelivered": "{quantity} × {name} added to stock and marked ready for {patient}.",
       "collected": "{name} handed over to {patient}. The stock has been dispensed.",
       "cancelled": "The request for {name} from {patient} is cancelled."
     },
@@ -446,6 +454,21 @@
     "detailsTitle": "Contact details",
     "loginLink": "Contact the pharmacy"
   },
+  "phone": {
+    "label": "Mobile phone number",
+    "hint": "For example 079 123 4567. The pharmacy calls this number when a preorder is ready.",
+    "required": "Enter your phone number.",
+    "invalid": "Enter a valid phone number: 8 to 15 digits, with + for the country code if you like.",
+    "title": "Phone number",
+    "why": "The pharmacy uses it to call you about your requests. Only pharmacy staff can see it.",
+    "save": "Save phone number",
+    "saved": "Phone number saved.",
+    "missingBanner": "Add your phone number so the pharmacy can reach you about your requests.",
+    "addNow": "Add it now",
+    "neededToRequest": "Add your phone number to request",
+    "none": "No phone number",
+    "callLabel": "Call {phone}"
+  },
   "errors": {
     "VALIDATION_FAILED": "Some fields need attention.",
     "INVALID_JSON": "The request could not be read.",
@@ -488,6 +511,7 @@
     "ATTACHMENT_TYPE": "Only image files can be sent: PNG, JPEG, WebP or GIF.",
     "ATTACHMENT_TOO_LARGE": "Images can be at most {count} MB.",
     "ATTACHMENT_NOT_FOUND": "This image is no longer available.",
-    "ACCOUNT_DELETE_FORBIDDEN": "Staff accounts cannot be deleted here."
+    "ACCOUNT_DELETE_FORBIDDEN": "Staff accounts cannot be deleted here.",
+    "PHONE_REQUIRED": "Add a phone number to your account first, so the pharmacy can call you when it is ready."
   }
 }

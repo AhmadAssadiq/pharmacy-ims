@@ -85,6 +85,13 @@ export default function Layout() {
         </div>
       </header>
       <main className="page" id="main">
+        {/* Patients who registered before phone numbers were required are asked for one. */}
+        {!isStaff && !user.phone && (
+          <div className="alert alert--warning phone-banner" role="status">
+            <span>{t('phone.missingBanner')}</span>{' '}
+            <Link to="/patient/account#phone">{t('phone.addNow')}</Link>
+          </div>
+        )}
         <Outlet />
       </main>
     </div>

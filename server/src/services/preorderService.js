@@ -2,8 +2,13 @@
  * Preorders (GP2 addition): a patient asks for a medication that is out of
  * stock, staff mark it ready when it arrives, and the patient collects it.
  *
- * No stock is reserved when a request is made or marked ready. Marking it
- * collected dispenses it through the same FEFO line the Dispense page uses
+ * Marking a request ready normally records the delivery that came in for it:
+ * staff enter the lot (quantity, expiry, lot number) and it is added to stock
+ * in the same transaction. If the stock was received some other way (Add
+ * stock), staff can mark it ready without a delivery so it is not counted
+ * twice. Nothing is reserved: until it is collected, those units are on the
+ * shelf like any others. Marking it collected dispenses it through the same
+ * FEFO line the Dispense page uses
  * (salesService.dispenseLine), inside one transaction with the status change,
  * so medication_batches and sales_history stay correct and the forecast sees
  * the sale on the day the stock actually left the shelf. If too little stock
@@ -12,11 +17,13 @@
 const pool = require('../config/db');
 const preorderModel = require('../models/preorderModel');
 const medicationModel = require('../models/medicationModel');
+const medicationBatchModel = require('../models/medicationBatchModel');
 const salesService = require('./salesService');
 const {
   validateCreatePreorder,
   validateStatusUpdate,
   validateStatusFilter,
+  validateDelivery,
   canTransition,
 } = require('../validation/preorderValidation');
 const HttpError = require('../utils/httpError');
@@ -25,6 +32,11 @@ const { ERROR_CODES, PREORDER_STATUS } = require('../../../shared/constants.json
 const notFound = () => new HttpError(404, 'Preorder not found', undefined, { code: ERROR_CODES.PREORDER_NOT_FOUND });
 
 async function createPreorder(patient, body) {
+  // Staff call the patient when it arrives, so a request needs a number to call.
+  if (!patient.phone) {
+    throw new HttpError(409, 'Add a phone number to your account first', undefined, { code: ERROR_CODES.PHONE_REQUIRED });
+  }
+
   const { valid, errors, value } = validateCreatePreorder(body);
   if (!valid) throw new HttpError(400, 'Validation failed', errors, { code: ERROR_CODES.VALIDATION_FAILED });
 
@@ -62,8 +74,12 @@ async function listAll(query = {}) {
   return preorderModel.findAll({ status: value.status });
 }
 
-/** Staff: move a request along. Collecting it dispenses the stock in the same transaction. */
-async function updateStatus(id, body) {
+/**
+ * Staff: move a request along. `body.delivery` (with status "ready") is the
+ * lot that arrived for it and is added to stock; collecting dispenses it.
+ * Each runs in the same transaction as the status change.
+ */
+async function updateStatus(id, body = {}) {
   const { valid, errors, value } = validateStatusUpdate(body);
   if (!valid) throw new HttpError(400, 'Validation failed', errors, { code: ERROR_CODES.VALIDATION_FAILED });
 
@@ -78,6 +94,18 @@ async function updateStatus(id, body) {
         code: ERROR_CODES.PREORDER_INVALID_TRANSITION,
         params: { from: preorder.status, to: value.status },
       });
+    }
+
+    let delivered = null;
+    if (value.status === PREORDER_STATUS.READY && body.delivery) {
+      const delivery = validateDelivery(body.delivery, preorder.quantity, salesService.today());
+      if (!delivery.valid) {
+        throw new HttpError(400, 'Validation failed', delivery.errors, { code: ERROR_CODES.VALIDATION_FAILED });
+      }
+      delivered = await medicationBatchModel.create(
+        { medication_id: preorder.medication_id, ...delivery.value, received_date: salesService.today() },
+        conn
+      );
     }
 
     if (value.status === PREORDER_STATUS.COLLECTED) {
@@ -98,14 +126,13 @@ async function updateStatus(id, body) {
 
     await preorderModel.updateStatus(id, value.status, conn);
     await conn.commit();
+    return { preorder: await preorderModel.findById(id), delivered };
   } catch (err) {
     await conn.rollback();
     throw err;
   } finally {
     conn.release();
   }
-
-  return preorderModel.findById(id);
 }
 
 /**

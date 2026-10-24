@@ -7,7 +7,8 @@
  */
 const pool = require('../config/db');
 
-const SELECT = `SELECT p.id, p.patient_id, u.name AS patient_name, p.medication_id, m.name AS medication_name,
+const SELECT = `SELECT p.id, p.patient_id, u.name AS patient_name, u.phone AS patient_phone,
+                       p.medication_id, m.name AS medication_name,
                        p.quantity, p.status, p.note, p.created_at, p.updated_at
                 FROM preorders p
                 JOIN users u ON u.id = p.patient_id

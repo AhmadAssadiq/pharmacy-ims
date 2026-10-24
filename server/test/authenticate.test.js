@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { createAuthenticate } = require('../src/middleware/authenticate');
 const { signToken } = require('../src/services/tokenService');
 
-const alice = { id: 7, name: 'Alice', email: 'alice@example.com', role: 'patient' };
+const alice = { id: 7, name: 'Alice', email: 'alice@example.com', phone: '0791234567', role: 'patient' };
 
 function run(middleware, headers) {
   return new Promise((resolve) => {

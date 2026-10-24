@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { fetchAvailability } from '../../api/availability';
 import { cancelMyPreorder, createPreorder, fetchMyPreorders } from '../../api/preorders';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import { PreorderStatus } from '../../components/StatusMark';
+import { useAuth } from '../../context/AuthContext';
 import { useI18n } from '../../i18n/I18nContext';
 import constants from '../../../../shared/constants.json';
 
@@ -18,6 +20,7 @@ const OPEN = [PREORDER_STATUS.PENDING, PREORDER_STATUS.READY];
  */
 export default function PatientAvailabilityPage() {
   const { t, te, formatDate } = useI18n();
+  const { user } = useAuth();
   const [medications, setMedications] = useState([]);
   const [preorders, setPreorders] = useState([]);
   const [filter, setFilter] = useState('');
@@ -176,6 +179,11 @@ export default function PatientAvailabilityPage() {
                 {!m.in_stock &&
                   (openRequestFor.has(m.id) ? (
                     <span className="muted" style={{ fontSize: 'var(--fs-small)' }}>{t('preorders.alreadyRequested')}</span>
+                  ) : !user.phone ? (
+                    // The pharmacy calls when it arrives, so a request needs a phone number first.
+                    <Link to="/patient/account#phone" style={{ fontSize: 'var(--fs-small)' }}>
+                      {t('phone.neededToRequest')}
+                    </Link>
                   ) : (
                     <button
                       type="button"

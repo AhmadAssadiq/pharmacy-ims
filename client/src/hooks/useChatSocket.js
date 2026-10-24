@@ -36,9 +36,15 @@ export default function useChatSocket(onEvent) {
           // ignore malformed frames
         }
       };
-      ws.onclose = () => {
+      ws.onclose = (event) => {
         setStatus('offline');
         socketRef.current = null;
+        // 4401: the server refused this token (expired, invalid, or the account
+        // was deleted). Retrying would loop forever, so sign out instead.
+        if (event.code === 4401) {
+          window.dispatchEvent(new Event('pims:unauthorized'));
+          return;
+        }
         if (!closed) reconnectTimer = setTimeout(connect, RECONNECT_DELAY_MS);
       };
       ws.onerror = () => ws.close();

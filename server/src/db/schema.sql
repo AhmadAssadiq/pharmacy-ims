@@ -7,10 +7,14 @@ CREATE DATABASE IF NOT EXISTS pharmacy_ims
 USE pharmacy_ims;
 
 -- Staff and patient accounts. Passwords are stored only as bcrypt hashes.
+-- phone is required for every patient who registers (GP2 addition) so the
+-- pharmacy can call about a preorder; it is NULL only for staff and for
+-- patients who registered before it existed, who are asked to add one.
 CREATE TABLE IF NOT EXISTS users (
   id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
   name          VARCHAR(100) NOT NULL,
   email         VARCHAR(255) NOT NULL,
+  phone         VARCHAR(20) NULL,
   password_hash VARCHAR(255) NOT NULL,
   role          ENUM('staff', 'patient') NOT NULL,
   PRIMARY KEY (id),

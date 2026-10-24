@@ -5,10 +5,19 @@
  */
 function createRateLimiter({ limit, windowMs, now = () => Date.now() }) {
   const windows = new Map(); // key -> { count, resetAt }
+  let hits = 0;
+
+  // Expired windows are dropped every so often, so a stream of different
+  // emails or addresses cannot grow the map without bound.
+  function prune(time) {
+    for (const [key, entry] of windows) if (entry.resetAt <= time) windows.delete(key);
+  }
 
   /** Counts one attempt. Returns { allowed, retryAfterMs }. */
   function hit(key) {
     const time = now();
+    hits += 1;
+    if (hits % 100 === 0) prune(time);
     let entry = windows.get(key);
     if (!entry || entry.resetAt <= time) {
       entry = { count: 0, resetAt: time + windowMs };
@@ -23,7 +32,7 @@ function createRateLimiter({ limit, windowMs, now = () => Date.now() }) {
     windows.delete(key);
   }
 
-  return { hit, reset };
+  return { hit, reset, size: () => windows.size };
 }
 
 module.exports = { createRateLimiter };

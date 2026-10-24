@@ -80,7 +80,7 @@ const sendImage = asyncHandler(async (req, res) => {
  * treating it as anything else. The key is a random UUID, which is what makes
  * the long, private cache safe.
  */
-const getAttachment = asyncHandler(async (req, res) => {
+const getAttachment = asyncHandler(async (req, res, next) => {
   const { file, mime, name } = await chatService.getAttachment(req.params.key, req.user);
   res.set({
     'Content-Type': mime,
@@ -89,7 +89,12 @@ const getAttachment = asyncHandler(async (req, res) => {
     'Content-Security-Policy': "default-src 'none'; sandbox",
     'Cache-Control': 'private, max-age=31536000, immutable',
   });
-  res.sendFile(file, { cacheControl: false, dotfiles: 'deny' });
+  // With a callback, a file missing from disk becomes a plain 404 instead of an
+  // error whose message would carry the file's absolute path to the client.
+  res.sendFile(file, { cacheControl: false, dotfiles: 'deny' }, (err) => {
+    if (!err || res.headersSent) return;
+    next(new HttpError(404, 'Attachment not found', undefined, { code: ERROR_CODES.ATTACHMENT_NOT_FOUND }));
+  });
 });
 
 module.exports = { openSession, listSessions, listMessages, sendMessage, sendImage, getAttachment };

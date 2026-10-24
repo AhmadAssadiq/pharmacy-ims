@@ -92,7 +92,7 @@ async function persist({ session, sender, content, attachment }) {
   const patient = await userModel.findById(current.patient_id);
   return {
     message,
-    session: { ...current, patient_name: patient ? patient.name : 'Patient' },
+    session: { ...current, patient_name: patient ? patient.name : 'Patient', patient_phone: patient?.phone ?? null },
   };
 }
 

@@ -4,6 +4,7 @@
  */
 const { PREORDER_STATUS, PREORDER_MAX_QUANTITY, PREORDER_NOTE_MAX_LENGTH } = require('../../../shared/constants.json');
 const { validateSaleItem } = require('./salesValidation');
+const { validateBatch } = require('./medicationValidation');
 
 const STATUSES = Object.values(PREORDER_STATUS);
 
@@ -51,10 +52,35 @@ function validateStatusUpdate(body = {}) {
   return { valid: true, errors: {}, value: { status } };
 }
 
+/**
+ * The delivery recorded when staff mark a request ready: the lot that came in
+ * for it. It goes into stock like any received lot, so it must cover the
+ * request, and it must still be in date after today, or the patient could not
+ * collect it (expired lots are never dispensed). `today` is YYYY-MM-DD.
+ */
+function validateDelivery(raw, requestedQuantity, today = new Date().toISOString().slice(0, 10)) {
+  const result = validateBatch(raw || {});
+  const { errors, value } = result;
+  if (!errors.quantity && value.quantity < requestedQuantity) {
+    errors.quantity = `Must be at least the ${requestedQuantity} requested`;
+  }
+  if (!errors.expiry_date && value.expiry_date <= today) {
+    errors.expiry_date = 'Expiry date must be after today';
+  }
+  return { valid: Object.keys(errors).length === 0, errors, value };
+}
+
 /** Optional ?status= filter on the staff list. */
 function validateStatusFilter(raw) {
   if (raw === undefined || raw === null || raw === '') return { valid: true, errors: {}, value: { status: null } };
   return validateStatusUpdate({ status: raw });
 }
 
-module.exports = { validateCreatePreorder, validateStatusUpdate, validateStatusFilter, canTransition, TRANSITIONS };
+module.exports = {
+  validateCreatePreorder,
+  validateStatusUpdate,
+  validateStatusFilter,
+  validateDelivery,
+  canTransition,
+  TRANSITIONS,
+};

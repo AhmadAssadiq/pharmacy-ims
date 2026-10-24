@@ -6,11 +6,11 @@ GP2 additions and was recorded on 2026-10-21.
 
 ## 1. Unit tests (`npm test`)
 
-Runner: Node's built-in `node:test`. 92 tests in 16 files, all passing (2026-10-21).
+Runner: Node's built-in `node:test`. 101 tests in 17 files, all passing (2026-10-24).
 
 | File | Covers |
 |---|---|
-| `server/test/authValidation.test.js` | register/login payload validation, email normalisation, password length |
+| `server/test/authValidation.test.js` | register/login payload validation, email normalisation, password length, phone number required and normalised |
 | `server/test/loginAttempt.test.js` | lock after 5 failures, lock expiry, reset on success, per-account tracking (NFR 2.3) |
 | `server/test/requireRole.test.js` | staff allowed, patient rejected with 403, anonymous rejected with 401 (NFR 2.2) |
 | `server/test/authenticate.test.js` | valid token accepted; a deleted user's token refused at once; name and role taken from the database; missing or forged token refused |
@@ -18,8 +18,9 @@ Runner: Node's built-in `node:test`. 92 tests in 16 files, all passing (2026-10-
 | `server/test/stockFlags.test.js` | low-stock threshold, out of stock, 30-day near-expiry boundary, expired (FR 4) |
 | `server/test/fefo.test.js`, `salesValidation.test.js` | nearest-expiry-first allocation, expired lots never dispensed, sale basket validation |
 | `server/test/sessionMerge.test.js` | folding a patient's duplicate chat sessions into one (the in-place upgrade) |
-| `server/test/preorderValidation.test.js` | preorder request rules (quantity cap, note length), every allowed and forbidden status transition |
-| `server/test/passwordReset.test.js` | reset token shape and SHA-256, expiry and single use, the rate limiter, forgot / reset validation |
+| `server/test/preorderValidation.test.js` | preorder request rules (quantity cap, note length), every allowed and forbidden status transition, the delivery recorded on "ready" |
+| `server/test/passwordReset.test.js` | reset token shape and SHA-256, expiry and single use, the rate limiter and its pruning, forgot / reset validation, the reset email in both languages |
+| `server/test/smtp.test.js` | message building (UTF-8 headers, base64 body), header-injection refusal, a full SMTP conversation against a fake server with dot-stuffing, AUTH PLAIN, no credentials without TLS |
 | `server/test/presence.test.js` | first-socket / last-socket edges, several tabs, idempotent disconnect, the pharmacy's online edge |
 | `server/test/attachments.test.js` | magic-byte sniffing (PNG, JPEG, GIF, WebP; SVG and others refused), upload and caption rules, display-name sanitising, Content-Disposition |
 | `server/test/accountDeletion.test.js` | password required, only patients may self-delete (staff 403), a locked account cannot delete |
@@ -96,3 +97,13 @@ one and deleted it afterwards.
 | Delete account | wrong password -> stays signed in, counts toward lockout; correct password -> signed out to login with a notice; old token -> 401 at once; open socket closed with 4401; user, session, messages (staff replies included), preorders, reset tokens and the image file all removed; staff self-delete -> 403 | - |
 | 404 page | signed out in the signed-out frame with "Go to sign in"; signed in inside the normal layout with the right home link; requested path shown; tab title set in both languages; `/` and wrong-role redirects unchanged | - |
 | About / Contact | placeholders from `config/pharmacy.js`; `tel:` and `mailto:` links; plain maps link; opening hours; Contact in both frames, "Message the pharmacy" only for a signed-in patient; nav and signed-out links; Arabic and dark mode | - |
+
+## 6. Phone numbers, preorder deliveries, password reset email, bug sweep (2026-10-24)
+
+| Change | Verified |
+|---|---|
+| Phone numbers | registration refuses a bad number (translated message) and stores `079 555 1234` as `0795551234`; a patient without one sees the banner, cannot request a preorder (UI link, API 409 PHONE_REQUIRED), adds one on the account page and the banner goes; staff see it as a `tel:` link on the preorder queue and in the chat inbox; `db:migrate` added the column in place and `db:seed` gave the demo patient its number |
+| Preorder delivery | "Mark ready" dialog pre-fills the requested quantity; too few units and a past expiry are refused inside the dialog; a delivery of 10 put a lot of 10 into stock (Inventory 0 -> 10); collecting 3 left 7 and wrote one `sales_history` row of 3 |
+| Password reset email | against a local mail catcher: one message, sender and Arabic subject correctly encoded, body in Arabic with the link; that link reset the password over HTTP and the new password signed in. Without SMTP settings the server logs "SMTP is not configured" once. Not verified: a real provider (needs your SMTP credentials) |
+| Bug sweep | a socket waiting on its user lookup is no longer killed by the heartbeat; a token the hub refuses (4401) signs the user out instead of reconnecting every 2 s (checked with a deleted account); a stored image missing from disk now gives a plain 404 with no server path in it; the rate limiter prunes expired windows; Inventory's "expiring" KPI and headline now say medications, which is what they count; signed-out pages no longer slide under the language / theme bar on a phone (checked at 375 px) |
+| Regression | 16 pages across staff, patient and signed-out load with no console errors |

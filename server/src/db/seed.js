@@ -22,7 +22,8 @@ const { ROLES } = require('../../../shared/constants.json');
 
 const DEMO_USERS = [
   { name: 'Pharmacy Staff', email: 'staff@pharmacy.com', password: 'Staff123!', role: ROLES.STAFF },
-  { name: 'Demo Patient', email: 'patient@example.com', password: 'Patient123!', role: ROLES.PATIENT },
+  // An obviously fictional number; patients must have one (GP2 addition).
+  { name: 'Demo Patient', email: 'patient@example.com', phone: '+962790000000', password: 'Patient123!', role: ROLES.PATIENT },
 ];
 
 /** Returns a YYYY-MM-DD date `days` days from today (negative = in the past). */
@@ -176,11 +177,17 @@ async function seedUsers() {
   for (const user of DEMO_USERS) {
     const existing = await userModel.findByEmail(user.email);
     if (existing) {
-      console.log(`  user ${user.email} already exists - skipped`);
+      // Accounts made before phone numbers existed get the demo number once.
+      if (user.phone && !existing.phone) {
+        await userModel.updatePhone(existing.id, user.phone);
+        console.log(`  user ${user.email} already exists - added its phone number`);
+      } else {
+        console.log(`  user ${user.email} already exists - skipped`);
+      }
       continue;
     }
     const passwordHash = await bcrypt.hash(user.password, 10);
-    await userModel.create({ name: user.name, email: user.email, passwordHash, role: user.role });
+    await userModel.create({ name: user.name, email: user.email, phone: user.phone, passwordHash, role: user.role });
     console.log(`  created ${user.role} account ${user.email}`);
   }
 }

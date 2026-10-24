@@ -18,6 +18,7 @@ const {
   validateRegister,
   validateLogin,
   validateDeleteAccount,
+  validatePhoneUpdate,
   canSelfDelete,
 } = require('../validation/authValidation');
 const HttpError = require('../utils/httpError');
@@ -26,7 +27,7 @@ const { ROLES, ERROR_CODES } = require('../../../shared/constants.json');
 const BCRYPT_ROUNDS = 10;
 
 function toPublicUser(user) {
-  return { id: user.id, name: user.name, email: user.email, role: user.role };
+  return { id: user.id, name: user.name, email: user.email, phone: user.phone ?? null, role: user.role };
 }
 
 async function register(body, { tracker = defaultTracker } = {}) {
@@ -44,6 +45,7 @@ async function register(body, { tracker = defaultTracker } = {}) {
   const user = await userModel.create({
     name: value.name,
     email: value.email,
+    phone: value.phone,
     passwordHash,
     role: ROLES.PATIENT,
   });
@@ -155,4 +157,11 @@ async function deleteOwnAccount(user, body, { tracker = defaultTracker } = {}) {
   return { removedImages: files.length };
 }
 
-module.exports = { register, login, deleteOwnAccount, toPublicUser, BCRYPT_ROUNDS };
+/** Adds or changes the signed-in user's phone number (GP2 addition). */
+async function updateOwnPhone(user, body) {
+  const { valid, errors, value } = validatePhoneUpdate(body);
+  if (!valid) throw new HttpError(400, 'Validation failed', errors, { code: ERROR_CODES.VALIDATION_FAILED });
+  return toPublicUser(await userModel.updatePhone(user.id, value.phone));
+}
+
+module.exports = { register, login, deleteOwnAccount, updateOwnPhone, toPublicUser, BCRYPT_ROUNDS };

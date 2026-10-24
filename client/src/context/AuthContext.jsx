@@ -1,12 +1,16 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { loadAuth, saveAuth } from '../api/client';
-import { loginRequest, registerRequest } from '../api/auth';
+import { loginRequest, meRequest, registerRequest } from '../api/auth';
 
 const AuthContext = createContext(null);
 
 /**
  * Holds the signed-in user and token, persists them in localStorage and
  * exposes login / register / logout to the rest of the app.
+ *
+ * The stored user is refreshed from /auth/me once on load, so details added
+ * since sign-in (a phone number, a changed name) are current; updateUser
+ * replaces it after the user edits their own details.
  */
 export function AuthProvider({ children }) {
   const [auth, setAuth] = useState(() => loadAuth());
@@ -30,6 +34,22 @@ export function AuthProvider({ children }) {
 
   const logout = useCallback(() => applyAuth(null), [applyAuth]);
 
+  const updateUser = useCallback((user) => {
+    setAuth((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev, user };
+      saveAuth(next);
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!loadAuth()?.token) return;
+    meRequest()
+      .then(({ user }) => updateUser(user))
+      .catch(() => {}); // a rejected token signs out through the event below
+  }, [updateUser]);
+
   // The API client fires this event when the server rejects the token.
   useEffect(() => {
     window.addEventListener('pims:unauthorized', logout);
@@ -37,8 +57,8 @@ export function AuthProvider({ children }) {
   }, [logout]);
 
   const value = useMemo(
-    () => ({ user: auth?.user || null, token: auth?.token || null, login, register, logout }),
-    [auth, login, register, logout]
+    () => ({ user: auth?.user || null, token: auth?.token || null, login, register, logout, updateUser }),
+    [auth, login, register, logout, updateUser]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -9,7 +9,7 @@ import constants from '../../../shared/constants.json';
  * thing afterwards, so it never tells anyone which addresses have accounts.
  */
 export default function ForgotPasswordPage() {
-  const { t, te } = useI18n();
+  const { t, te, lang } = useI18n();
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
   const [error, setError] = useState(null);
@@ -31,7 +31,7 @@ export default function ForgotPasswordPage() {
     setError(null);
     setSubmitting(true);
     try {
-      await forgotPasswordRequest(email);
+      await forgotPasswordRequest(email, lang);
       setSent(true);
     } catch (err) {
       setError(te(err));

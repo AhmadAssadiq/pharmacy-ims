@@ -4,6 +4,7 @@ const {
   validateCreatePreorder,
   validateStatusUpdate,
   validateStatusFilter,
+  validateDelivery,
   canTransition,
 } = require('../src/validation/preorderValidation');
 const { PREORDER_MAX_QUANTITY, PREORDER_NOTE_MAX_LENGTH } = require('../../shared/constants.json');
@@ -67,4 +68,17 @@ test('validates the target status and the list filter', () => {
   assert.deepEqual(validateStatusFilter(undefined).value, { status: null });
   assert.equal(validateStatusFilter('pending').value.status, 'pending');
   assert.equal(validateStatusFilter('nope').valid, false);
+});
+
+test('a delivery recorded on "ready" must cover the request and still be in date', () => {
+  const today = '2026-10-24';
+  const ok = validateDelivery({ quantity: '5', expiry_date: '2027-03-01', batch_number: ' OME-77 ' }, 2, today);
+  assert.equal(ok.valid, true);
+  assert.deepEqual(ok.value, { quantity: 5, expiry_date: '2027-03-01', batch_number: 'OME-77' });
+
+  assert.match(validateDelivery({ quantity: 1, expiry_date: '2027-03-01' }, 2, today).errors.quantity, /at least the 2/);
+  assert.ok(validateDelivery({ quantity: 2, expiry_date: today }, 2, today).errors.expiry_date, 'expiring today cannot be collected later');
+  assert.ok(validateDelivery({ quantity: 2, expiry_date: '2026-01-01' }, 2, today).errors.expiry_date);
+  assert.ok(validateDelivery({ quantity: 2 }, 2, today).errors.expiry_date);
+  assert.ok(validateDelivery(undefined, 2, today).errors.quantity);
 });

@@ -109,6 +109,11 @@ async function ensureChatAttachmentColumns(conn, database) {
   return added;
 }
 
+/** Patients' phone numbers (GP2 addition); see schema.sql. */
+async function ensureUserPhoneColumn(conn, database) {
+  return ensureColumn(conn, database, 'users', 'phone', 'VARCHAR(20) NULL AFTER email');
+}
+
 /**
  * Runs every upgrade step in order. The database name comes from
  * configuration, not user input; it is back-quoted because identifiers cannot
@@ -119,6 +124,7 @@ async function runUpgrades(conn, database) {
   if (merged > 0) console.log(`Merged duplicate chat sessions for ${merged} patient(s).`);
   const added = await ensureChatAttachmentColumns(conn, database);
   if (added.length > 0) console.log(`Added chat_messages columns: ${added.join(', ')}.`);
+  if (await ensureUserPhoneColumn(conn, database)) console.log('Added users.phone.');
 }
 
 module.exports = { runUpgrades, planSessionMerges };
