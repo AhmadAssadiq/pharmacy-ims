@@ -27,6 +27,13 @@ export default function ConfirmDialog({
   const dialogRef = useRef(null);
   const cancelRef = useRef(null);
   const openerRef = useRef(null);
+  // The latest busy flag and cancel handler, read by the key listener. Callers
+  // pass a new onCancel on every render, so depending on it would re-run the
+  // effect on each keystroke in a field and pull focus out to Cancel.
+  const busyRef = useRef(busy);
+  const onCancelRef = useRef(onCancel);
+  busyRef.current = busy;
+  onCancelRef.current = onCancel;
 
   useEffect(() => {
     if (!open) return undefined;
@@ -34,9 +41,9 @@ export default function ConfirmDialog({
     cancelRef.current?.focus();
 
     const onKeyDown = (e) => {
-      if (e.key === 'Escape' && !busy) {
+      if (e.key === 'Escape' && !busyRef.current) {
         e.preventDefault();
-        onCancel();
+        onCancelRef.current();
         return;
       }
       if (e.key !== 'Tab') return;
@@ -62,7 +69,7 @@ export default function ConfirmDialog({
       // Put the keyboard back where it was before the dialog opened.
       if (openerRef.current instanceof HTMLElement) openerRef.current.focus();
     };
-  }, [open, busy, onCancel]);
+  }, [open]);
 
   if (!open) return null;
 
