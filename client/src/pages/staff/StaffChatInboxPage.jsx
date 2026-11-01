@@ -1,16 +1,13 @@
-import { useCallback, useEffect, useState } from 'react';
+// The staff chat inbox (FR 5.2): every patient conversation in one list, and the chosen
+// conversation next to it. New messages and online dots update live, without refreshing.
+import { useEffect, useState } from 'react';
 import { fetchMessages, fetchSessions, postImage, postMessage } from '../../api/chat';
 import ChatWindow, { PresenceMark } from '../../components/chat/ChatWindow';
 import PhoneLink from '../../components/PhoneLink';
 import { useAuth } from '../../context/AuthContext';
-import useChatSocket from '../../hooks/useChatSocket';
-import { useI18n } from '../../i18n/I18nContext';
+import useChatSocket, { addMessageIfNew } from '../../hooks/useChatSocket';
+import { useI18n } from '../../i18n/useI18n';
 
-/**
- * Staff unified inbox (FR 5.2): every patient session in one list, with the
- * selected conversation on the right. Incoming messages update both without
- * a page refresh.
- */
 export default function StaffChatInboxPage() {
   const { user } = useAuth();
   const { t, te, formatDateTime } = useI18n();
@@ -20,97 +17,131 @@ export default function StaffChatInboxPage() {
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [error, setError] = useState(null);
-  // patientId -> online. Seeded by the sessions list, then kept current by the hub.
-  const [online, setOnline] = useState({});
+  // Which patients are online: { patientId: true/false }
+  const [onlinePatients, setOnlinePatients] = useState({});
 
+  // On load: the list of conversations (each says whether its patient is online)
   useEffect(() => {
     fetchSessions()
       .then((data) => {
         setSessions(data.sessions);
-        setOnline((prev) => ({ ...Object.fromEntries(data.sessions.map((s) => [s.patient_id, s.online])), ...prev }));
+        const online = {};
+        for (const session of data.sessions) {
+          online[session.patient_id] = session.online;
+        }
+        // Live updates that already arrived win over this first list
+        setOnlinePatients((current) => ({ ...online, ...current }));
       })
-      .catch((err) => setError(err))
+      .catch((loadError) => setError(loadError))
       .finally(() => setLoadingSessions(false));
   }, []);
 
+  // When a conversation is chosen: load its messages
   useEffect(() => {
-    if (!selectedId) return;
-    let cancelled = false;
+    if (!selectedId) {
+      return;
+    }
+    let isStillSelected = true; // ignore the answer if another conversation was chosen meanwhile
     setLoadingMessages(true);
     fetchMessages(selectedId)
       .then((data) => {
-        if (!cancelled) setMessages(data.messages);
+        if (isStillSelected) setMessages(data.messages);
       })
-      .catch((err) => {
-        if (!cancelled) setError(err);
+      .catch((loadError) => {
+        if (isStillSelected) setError(loadError);
       })
       .finally(() => {
-        if (!cancelled) setLoadingMessages(false);
+        if (isStillSelected) setLoadingMessages(false);
       });
     return () => {
-      cancelled = true;
+      isStillSelected = false;
     };
   }, [selectedId]);
 
-  const handleEvent = useCallback(
-    (frame) => {
-      if (frame.type === 'ready') {
-        // The snapshot is the whole truth at this moment: everyone not in it is offline.
-        const ids = new Set(frame.presence?.patients ?? []);
-        setOnline((prev) => {
-          const next = Object.fromEntries(Object.keys(prev).map((id) => [id, false]));
-          for (const id of ids) next[id] = true;
-          return next;
-        });
-        return;
+  // Moves a conversation to the top of the list with its newest message
+  // (and adds it if it is a new conversation)
+  function updateInbox(message, session) {
+    setSessions((current) => {
+      const existing = current.find((item) => item.id === session.id);
+      const others = current.filter((item) => item.id !== session.id);
+      const updated = {
+        id: session.id,
+        patient_id: session.patient_id,
+        created_at: existing ? existing.created_at : session.created_at,
+        patient_name: session.patient_name,
+        patient_phone: session.patient_phone ?? (existing ? existing.patient_phone : null),
+        staff_id: session.staff_id,
+        staff_name: existing ? existing.staff_name : undefined,
+        last_message: message.content,
+        last_message_has_image: Boolean(message.attachment),
+        last_message_at: message.timestamp,
+      };
+      return [updated, ...others];
+    });
+  }
+
+  // Everything the chat server sends us
+  function handleEvent(event) {
+    if (event.type === 'ready') {
+      // The list in 'ready' is everyone online right now: everybody else is offline
+      const online = {};
+      for (const patientId of Object.keys(onlinePatients)) {
+        online[patientId] = false;
       }
-      if (frame.type === 'presence' && frame.scope === 'patient') {
-        setOnline((prev) => ({ ...prev, [frame.userId]: frame.online }));
-        return;
+      for (const patientId of event.presence.patients) {
+        online[patientId] = true;
       }
-      if (frame.type !== 'message') return;
-      const { message, session } = frame;
-
-      // Update the inbox summary (and add the session if it is new).
-      setSessions((prev) => {
-        const rest = prev.filter((s) => s.id !== session.id);
-        const existing = prev.find((s) => s.id === session.id);
-        const updated = {
-          ...(existing || { id: session.id, patient_id: session.patient_id, created_at: session.created_at }),
-          patient_name: session.patient_name,
-          patient_phone: session.patient_phone ?? existing?.patient_phone ?? null,
-          staff_id: session.staff_id,
-          last_message: message.content,
-          last_message_has_image: Boolean(message.attachment),
-          last_message_at: message.timestamp,
-        };
-        return [updated, ...rest];
-      });
-
-      if (message.chat_session_id === selectedId) {
-        setMessages((prev) => (prev.some((m) => m.id === message.id) ? prev : [...prev, message]));
+      setOnlinePatients(online);
+    } else if (event.type === 'presence' && event.scope === 'patient') {
+      setOnlinePatients((current) => ({ ...current, [event.userId]: event.online }));
+    } else if (event.type === 'message') {
+      updateInbox(event.message, event.session);
+      if (event.message.chat_session_id === selectedId) {
+        setMessages((current) => addMessageIfNew(current, event.message));
       }
-    },
-    [selectedId]
-  );
-
-  const { status, send } = useChatSocket(handleEvent);
-
-  const handleSend = async (content) => {
-    const sent = send({ type: 'message', sessionId: selectedId, content });
-    if (!sent) {
-      const { message } = await postMessage(selectedId, content);
-      setMessages((prev) => (prev.some((m) => m.id === message.id) ? prev : [...prev, message]));
     }
-  };
+  }
 
-  const handleSendImage = async (file, caption) => {
-    const { message } = await postImage(selectedId, file, caption);
-    setMessages((prev) => (prev.some((m) => m.id === message.id) ? prev : [...prev, message]));
-  };
+  const { status, sendMessage } = useChatSocket(handleEvent);
 
-  const selected = sessions.find((s) => s.id === selectedId);
-  const isOnline = (patientId) => status === 'online' && Boolean(online[patientId]);
+  // Send over the live connection; if it is down, send through the normal API instead
+  async function handleSend(text) {
+    let message;
+    if (status === 'online') {
+      message = await sendMessage(selectedId, text);
+    } else {
+      message = (await postMessage(selectedId, text)).message;
+    }
+    setMessages((current) => addMessageIfNew(current, message));
+  }
+
+  // Images always go through the normal API
+  async function handleSendImage(file, caption) {
+    const result = await postImage(selectedId, file, caption);
+    setMessages((current) => addMessageIfNew(current, result.message));
+  }
+
+  // A patient counts as online only while our own connection is up
+  function isOnline(patientId) {
+    return status === 'online' && Boolean(onlinePatients[patientId]);
+  }
+
+  function presenceLabel(patientId) {
+    return isOnline(patientId) ? t('presence.patientOnline') : t('presence.patientOffline');
+  }
+
+  // The preview text under a patient's name in the list
+  function lastMessagePreview(session) {
+    if (session.last_message) {
+      return <bdi>{session.last_message.slice(0, 40)}</bdi>;
+    }
+    if (session.last_message_has_image) {
+      return t('chat.imagePreview');
+    }
+    return t('chat.noMessagesYet');
+  }
+
+  const selected = sessions.find((session) => session.id === selectedId);
 
   return (
     <>
@@ -126,32 +157,23 @@ export default function StaffChatInboxPage() {
           {loadingSessions && <p className="muted">{t('chat.loadingSessions')}</p>}
           {!loadingSessions && sessions.length === 0 && <p className="empty">{t('chat.noSessions')}</p>}
           <ul className="list">
-            {sessions.map((s) => (
-              <li key={s.id}>
+            {sessions.map((session) => (
+              <li key={session.id}>
                 <button
                   type="button"
-                  className={`list__item list__item--button ${s.id === selectedId ? 'is-active' : ''}`}
-                  onClick={() => setSelectedId(s.id)}
+                  className={`list__item list__item--button ${session.id === selectedId ? 'is-active' : ''}`}
+                  onClick={() => setSelectedId(session.id)}
                 >
                   <span>
-                    <strong><bdi>{s.patient_name}</bdi></strong>{' '}
-                    <PresenceMark
-                      online={isOnline(s.patient_id)}
-                      label={isOnline(s.patient_id) ? t('presence.patientOnline') : t('presence.patientOffline')}
-                    />
+                    <strong><bdi>{session.patient_name}</bdi></strong>{' '}
+                    <PresenceMark online={isOnline(session.patient_id)} label={presenceLabel(session.patient_id)} />
                     <br />
                     <span className="muted" style={{ fontSize: '0.85rem' }}>
-                      {s.last_message ? (
-                        <bdi>{s.last_message.slice(0, 40)}</bdi>
-                      ) : s.last_message_has_image ? (
-                        t('chat.imagePreview')
-                      ) : (
-                        t('chat.noMessagesYet')
-                      )}
+                      {lastMessagePreview(session)}
                     </span>
                   </span>
                   <span className="muted" style={{ fontSize: '0.75rem', whiteSpace: 'nowrap' }}>
-                    {formatDateTime(s.last_message_at || s.created_at)}
+                    {formatDateTime(session.last_message_at || session.created_at)}
                   </span>
                 </button>
               </li>
@@ -169,10 +191,7 @@ export default function StaffChatInboxPage() {
                 <PhoneLink phone={selected.patient_phone} />
               </>
             }
-            presence={{
-              online: isOnline(selected.patient_id),
-              label: isOnline(selected.patient_id) ? t('presence.patientOnline') : t('presence.patientOffline'),
-            }}
+            presence={{ online: isOnline(selected.patient_id), label: presenceLabel(selected.patient_id) }}
             messages={messages}
             currentUserId={user.id}
             onSend={handleSend}

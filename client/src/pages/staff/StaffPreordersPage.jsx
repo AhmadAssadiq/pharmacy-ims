@@ -1,9 +1,10 @@
+import StyledText from '../../components/StyledText';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { fetchPreorders, updatePreorderStatus } from '../../api/preorders';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import { PreorderStatus } from '../../components/StatusMark';
 import PhoneLink from '../../components/PhoneLink';
-import { useI18n } from '../../i18n/I18nContext';
+import { useI18n } from '../../i18n/useI18n';
 import constants from '../../../../shared/constants.json';
 
 const { PREORDER_STATUS } = constants;
@@ -147,9 +148,9 @@ export default function StaffPreordersPage() {
           {!loading && (
             <p className="page-finding">
               {counts.ready > 0
-                ? t('preorders.findingReady', { count: <strong>{counts.ready}</strong>, n: counts.ready })
+                ? <StyledText id="preorders.findingReady" count={counts.ready} />
                 : counts.pending > 0
-                  ? t('preorders.findingPending', { count: <strong>{counts.pending}</strong>, n: counts.pending })
+                  ? <StyledText id="preorders.findingPending" count={counts.pending} />
                   : t('preorders.findingNone')}
             </p>
           )}

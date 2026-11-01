@@ -1,7 +1,8 @@
+import StyledText from '../StyledText';
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { dismissAlert, fetchAlerts } from '../../api/alerts';
-import { useI18n } from '../../i18n/I18nContext';
+import { useI18n } from '../../i18n/useI18n';
 import constants from '../../../../shared/constants.json';
 
 const REFRESH_INTERVAL_MS = 60_000;
@@ -83,10 +84,10 @@ export default function ReorderAlertPanel() {
                 <span className="alert-row__meta">
                   {now ? t('alerts.alreadyBelow') : t('alerts.fallsOn', { date: formatDate(alert.predicted_date) })}
                   {' · '}
-                  {t('alerts.stockLine', {
-                    quantity: <span className="num">{alert.current_quantity}</span>,
-                    threshold: <span className="num">{alert.low_stock_threshold}</span>,
-                  })}
+                  <StyledText
+                    id="alerts.stockLine"
+                    values={{ quantity: alert.current_quantity, threshold: alert.low_stock_threshold }}
+                  />
                 </span>
               </span>
               <span className="alert-row__actions">

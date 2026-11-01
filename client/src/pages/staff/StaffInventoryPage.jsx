@@ -1,10 +1,11 @@
+import StyledText from '../../components/StyledText';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { deleteMedication, fetchMedications, updateMedication } from '../../api/medications';
 import InventoryTable from '../../components/inventory/InventoryTable';
 import MedicationForm from '../../components/inventory/MedicationForm';
 import ReorderAlertPanel from '../../components/alerts/ReorderAlertPanel';
-import { useI18n } from '../../i18n/I18nContext';
+import { useI18n } from '../../i18n/useI18n';
 import constants from '../../../../shared/constants.json';
 
 const { NEAR_EXPIRY_DAYS } = constants;
@@ -121,12 +122,11 @@ export default function StaffInventoryPage() {
   /* The screen's one finding: the most urgent thing in today's data. */
   const finding = (() => {
     if (loading || error) return null;
-    // The count renders bold; `n` picks the plural form.
-    const bold = (n) => ({ count: <strong>{n}</strong>, n });
-    if (counts.expired > 0) return t('inventory.findingExpired', bold(counts.expired));
-    if (counts.low > 0) return t('inventory.findingLow', bold(counts.low));
+    // The count is shown in bold (see components/StyledText.jsx)
+    if (counts.expired > 0) return <StyledText id="inventory.findingExpired" count={counts.expired} />;
+    if (counts.low > 0) return <StyledText id="inventory.findingLow" count={counts.low} />;
     if (counts.expiring > 0) {
-      return t('inventory.findingExpiring', { ...bold(counts.expiring), days: NEAR_EXPIRY_DAYS });
+      return <StyledText id="inventory.findingExpiring" count={counts.expiring} values={{ days: NEAR_EXPIRY_DAYS }} />;
     }
     return t('inventory.findingClear', { days: NEAR_EXPIRY_DAYS });
   })();

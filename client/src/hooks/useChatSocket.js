@@ -1,70 +1,85 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { getToken } from '../api/client';
+// Keeps a live chat connection (Socket.IO) open while a chat page is showing.
+//
+//   const { status, sendMessage } = useChatSocket(handleEvent);
+//
+// - status: 'connecting', 'online' or 'offline' (Socket.IO reconnects by itself when offline)
+// - handleEvent(event) is called for everything the server sends, with a `type`:
+//     { type: 'ready', user, presence }      right after connecting
+//     { type: 'message', message, session }  a new chat message
+//     { type: 'presence', scope, online, userId? }  someone came online / went offline
+// - sendMessage(sessionId, text) sends a message over the connection and returns the saved
+//   message, or throws an ApiError if the server refused it.
+import { useEffect, useRef, useState } from 'react';
+import { io } from 'socket.io-client';
+import { ApiError, getToken } from '../api/client';
 
-const RECONNECT_DELAY_MS = 2000;
-
-/**
- * Keeps a WebSocket connection to the chat hub open for the lifetime of the
- * component, reconnecting automatically. `onEvent` receives every parsed
- * frame from the server; `send` transmits a message frame and returns false
- * when the socket is not open (callers then fall back to HTTP).
- */
-export default function useChatSocket(onEvent) {
+export default function useChatSocket(handleEvent) {
   const [status, setStatus] = useState('connecting');
   const socketRef = useRef(null);
-  const handlerRef = useRef(onEvent);
-  handlerRef.current = onEvent;
+
+  // Always call the newest handleEvent (it changes when the page's state changes),
+  // without having to reconnect each time
+  const handleEventRef = useRef(handleEvent);
+  handleEventRef.current = handleEvent;
 
   useEffect(() => {
-    let closed = false;
-    let reconnectTimer = null;
+    // Connect to the same server the page came from. The login token is sent with every
+    // (re)connection; the server refuses the connection if it is not valid.
+    const socket = io({
+      auth: (sendAuth) => sendAuth({ token: getToken() }),
+    });
+    socketRef.current = socket;
 
-    const connect = () => {
-      const token = getToken();
-      if (!token || closed) return;
+    socket.on('connect', () => setStatus('online'));
 
-      const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-      const ws = new WebSocket(`${protocol}://${window.location.host}/ws?token=${encodeURIComponent(token)}`);
-      socketRef.current = ws;
-      setStatus('connecting');
+    socket.on('disconnect', (reason) => {
+      setStatus('offline');
+      // The server closed the connection on purpose (account deleted, password reset): sign out
+      if (reason === 'io server disconnect') {
+        window.dispatchEvent(new Event('pims:unauthorized'));
+      }
+    });
 
-      ws.onopen = () => setStatus('online');
-      ws.onmessage = (event) => {
-        try {
-          handlerRef.current?.(JSON.parse(event.data));
-        } catch {
-          // ignore malformed frames
-        }
-      };
-      ws.onclose = (event) => {
-        setStatus('offline');
-        socketRef.current = null;
-        // 4401: the server refused this token (expired, invalid, or the account
-        // was deleted). Retrying would loop forever, so sign out instead.
-        if (event.code === 4401) {
-          window.dispatchEvent(new Event('pims:unauthorized'));
-          return;
-        }
-        if (!closed) reconnectTimer = setTimeout(connect, RECONNECT_DELAY_MS);
-      };
-      ws.onerror = () => ws.close();
-    };
+    socket.on('connect_error', (error) => {
+      setStatus('offline');
+      // The server refused the login token: sign out instead of retrying for ever
+      if (error.message === 'AUTH_FAILED') {
+        window.dispatchEvent(new Event('pims:unauthorized'));
+      }
+    });
 
-    connect();
+    // Pass every server event on to the page, with its type
+    socket.on('ready', (data) => handleEventRef.current({ type: 'ready', ...data }));
+    socket.on('message', (data) => handleEventRef.current({ type: 'message', ...data }));
+    socket.on('presence', (data) => handleEventRef.current({ type: 'presence', ...data }));
 
-    return () => {
-      closed = true;
-      clearTimeout(reconnectTimer);
-      socketRef.current?.close();
-    };
+    // Close the connection when the page closes
+    return () => socket.disconnect();
   }, []);
 
-  const send = useCallback((frame) => {
-    const ws = socketRef.current;
-    if (!ws || ws.readyState !== WebSocket.OPEN) return false;
-    ws.send(JSON.stringify(frame));
-    return true;
-  }, []);
+  // Sends a text message and waits for the server's reply (it saves the message first)
+  function sendMessage(sessionId, content) {
+    return new Promise((resolve, reject) => {
+      socketRef.current.emit('message', { sessionId, content }, (reply) => {
+        if (reply.ok) {
+          resolve(reply.message);
+        } else {
+          reject(new ApiError(400, reply.error, undefined, reply.code, reply.params));
+        }
+      });
+    });
+  }
 
-  return { status, send };
+  return { status, sendMessage };
+}
+
+// Adds a message to a list unless it is already there (a message can arrive twice:
+// once as the reply to sending it, and once from the live connection).
+export function addMessageIfNew(messages, newMessage) {
+  for (const message of messages) {
+    if (message.id === newMessage.id) {
+      return messages;
+    }
+  }
+  return [...messages, newMessage];
 }

@@ -1,3 +1,4 @@
+import StyledText from '../../components/StyledText';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { fetchAvailability } from '../../api/availability';
@@ -5,7 +6,7 @@ import { cancelMyPreorder, createPreorder, fetchMyPreorders } from '../../api/pr
 import ConfirmDialog from '../../components/ConfirmDialog';
 import { PreorderStatus } from '../../components/StatusMark';
 import { useAuth } from '../../context/AuthContext';
-import { useI18n } from '../../i18n/I18nContext';
+import { useI18n } from '../../i18n/useI18n';
 import constants from '../../../../shared/constants.json';
 
 const { PREORDER_MAX_QUANTITY, PREORDER_NOTE_MAX_LENGTH, PREORDER_STATUS } = constants;
@@ -130,10 +131,7 @@ export default function PatientAvailabilityPage() {
                   <strong><bdi>{p.medication_name}</bdi></strong>
                   <br />
                   <span className="muted" style={{ fontSize: '0.85rem' }}>
-                    {t('preorders.mineLine', {
-                      quantity: <span className="num">{p.quantity}</span>,
-                      date: <span className="date">{formatDate(p.created_at)}</span>,
-                    })}
+                    <StyledText id="preorders.mineLine" values={{ quantity: p.quantity, date: formatDate(p.created_at) }} />
                   </span>
                 </span>
                 <span className="list__actions">

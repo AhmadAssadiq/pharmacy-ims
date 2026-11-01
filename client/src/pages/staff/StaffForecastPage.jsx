@@ -4,7 +4,7 @@ import { fetchMedicationForecast } from '../../api/forecast';
 import DemandChart from '../../components/forecast/DemandChart';
 import MonthlyChart from '../../components/forecast/MonthlyChart';
 import StockProjectionChart from '../../components/forecast/StockProjectionChart';
-import { useI18n } from '../../i18n/I18nContext';
+import { useI18n } from '../../i18n/useI18n';
 import constants from '../../../../shared/constants.json';
 
 /**

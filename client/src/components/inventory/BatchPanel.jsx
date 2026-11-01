@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { createBatch, deleteBatch, fetchBatches, updateBatch } from '../../api/medications';
 import { expiryStatus } from '../../utils/expiry';
-import { useI18n } from '../../i18n/I18nContext';
+import { useI18n } from '../../i18n/useI18n';
 
 const EMPTY = { quantity: '', expiry_date: '', batch_number: '' };
 

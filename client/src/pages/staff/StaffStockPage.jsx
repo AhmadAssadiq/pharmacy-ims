@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { createMedication, fetchMedications } from '../../api/medications';
 import MedicationForm from '../../components/inventory/MedicationForm';
 import BatchPanel from '../../components/inventory/BatchPanel';
-import { useI18n } from '../../i18n/I18nContext';
+import { useI18n } from '../../i18n/useI18n';
 
 const NEW_MEDICATION = 'new';
 

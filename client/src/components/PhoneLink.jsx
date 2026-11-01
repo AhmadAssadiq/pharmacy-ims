@@ -1,4 +1,4 @@
-import { useI18n } from '../i18n/I18nContext';
+import { useI18n } from '../i18n/useI18n';
 
 /**
  * A patient's phone number as a tap-to-call link for staff (GP2 addition), or

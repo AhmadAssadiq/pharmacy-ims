@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { deleteAccountRequest, updatePhoneRequest } from '../../api/auth';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import { useAuth } from '../../context/AuthContext';
-import { useI18n } from '../../i18n/I18nContext';
+import { useI18n } from '../../i18n/useI18n';
 import { normalisePhone } from '../../utils/phone';
 
 /**

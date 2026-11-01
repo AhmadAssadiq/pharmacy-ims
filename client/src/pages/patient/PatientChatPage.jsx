@@ -1,14 +1,13 @@
-import { useCallback, useEffect, useState } from 'react';
+// The patient's chat with the pharmacy (FR 5, UC-2).
+// The patient has one conversation; it is opened (or created) when the page loads.
+// New messages arrive live over the chat connection (hooks/useChatSocket.js).
+import { useEffect, useState } from 'react';
 import { fetchMessages, openMySession, postImage, postMessage } from '../../api/chat';
 import ChatWindow from '../../components/chat/ChatWindow';
 import { useAuth } from '../../context/AuthContext';
-import useChatSocket from '../../hooks/useChatSocket';
-import { useI18n } from '../../i18n/I18nContext';
+import useChatSocket, { addMessageIfNew } from '../../hooks/useChatSocket';
+import { useI18n } from '../../i18n/useI18n';
 
-/**
- * Patient chat with the pharmacy (FR 5, UC-2). The patient's single session
- * is opened (or created) on load; new messages arrive over the WebSocket.
- */
 export default function PatientChatPage() {
   const { user } = useAuth();
   const { t } = useI18n();
@@ -16,61 +15,62 @@ export default function PatientChatPage() {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  // Whether anyone at the pharmacy is connected: null until the hub says.
+  // Whether anyone at the pharmacy is online: null until the server tells us
   const [pharmacyOnline, setPharmacyOnline] = useState(null);
 
+  // On load: open the conversation and load its messages
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
+    async function loadChat() {
       try {
-        const { session: opened } = await openMySession();
-        const { messages: history } = await fetchMessages(opened.id);
-        if (cancelled) return;
-        setSession(opened);
-        setMessages(history);
-      } catch (err) {
-        if (!cancelled) setError(err);
+        const opened = await openMySession();
+        const history = await fetchMessages(opened.session.id);
+        setSession(opened.session);
+        setMessages(history.messages);
+      } catch (loadError) {
+        setError(loadError);
       } finally {
-        if (!cancelled) setLoading(false);
+        setLoading(false);
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
+    }
+    loadChat();
   }, []);
 
-  const handleEvent = useCallback(
-    (frame) => {
-      if (frame.type === 'ready') return setPharmacyOnline(Boolean(frame.presence?.pharmacyOnline));
-      if (frame.type === 'presence' && frame.scope === 'pharmacy') return setPharmacyOnline(frame.online);
-      if (frame.type !== 'message' || !session || frame.message.chat_session_id !== session.id) return;
-      setMessages((prev) => (prev.some((m) => m.id === frame.message.id) ? prev : [...prev, frame.message]));
-    },
-    [session]
-  );
-
-  const { status, send } = useChatSocket(handleEvent);
-
-  const handleSend = async (content) => {
-    // Prefer the live socket; fall back to HTTP when it is reconnecting.
-    const sent = send({ type: 'message', sessionId: session.id, content });
-    if (!sent) {
-      const { message } = await postMessage(session.id, content);
-      setMessages((prev) => (prev.some((m) => m.id === message.id) ? prev : [...prev, message]));
+  // Everything the chat server sends us
+  function handleEvent(event) {
+    if (event.type === 'ready') {
+      setPharmacyOnline(Boolean(event.presence.pharmacyOnline));
+    } else if (event.type === 'presence' && event.scope === 'pharmacy') {
+      setPharmacyOnline(event.online);
+    } else if (event.type === 'message' && session && event.message.chat_session_id === session.id) {
+      setMessages((current) => addMessageIfNew(current, event.message));
     }
-  };
+  }
 
-  const handleSendImage = async (file, caption) => {
-    const { message } = await postImage(session.id, file, caption);
-    setMessages((prev) => (prev.some((m) => m.id === message.id) ? prev : [...prev, message]));
-  };
+  const { status, sendMessage } = useChatSocket(handleEvent);
 
-  // While our own socket is down the pharmacy's presence is unknown, not "offline".
-  const known = status === 'online' && pharmacyOnline !== null;
-  const presence = {
-    online: known && pharmacyOnline,
-    label: !known ? t('presence.unknown') : pharmacyOnline ? t('presence.pharmacyOnline') : t('presence.pharmacyOffline'),
-  };
+  // Send over the live connection; if it is down, send through the normal API instead
+  async function handleSend(text) {
+    let message;
+    if (status === 'online') {
+      message = await sendMessage(session.id, text);
+    } else {
+      message = (await postMessage(session.id, text)).message;
+    }
+    setMessages((current) => addMessageIfNew(current, message));
+  }
+
+  // Images always go through the normal API (they are too big for the chat connection)
+  async function handleSendImage(file, caption) {
+    const result = await postImage(session.id, file, caption);
+    setMessages((current) => addMessageIfNew(current, result.message));
+  }
+
+  // While our own connection is down we do not know if the pharmacy is online
+  const isKnown = status === 'online' && pharmacyOnline !== null;
+  let presenceLabel = t('presence.unknown');
+  if (isKnown) {
+    presenceLabel = pharmacyOnline ? t('presence.pharmacyOnline') : t('presence.pharmacyOffline');
+  }
 
   return (
     <>
@@ -79,8 +79,8 @@ export default function PatientChatPage() {
       </div>
       <ChatWindow
         title={t('chat.staffWindowTitle')}
-        subtitle={session?.staff_id ? t('chat.pharmacistJoined') : t('chat.waitingForPharmacist')}
-        presence={presence}
+        subtitle={session && session.staff_id ? t('chat.pharmacistJoined') : t('chat.waitingForPharmacist')}
+        presence={{ online: isKnown && pharmacyOnline, label: presenceLabel }}
         messages={messages}
         currentUserId={user.id}
         onSend={handleSend}

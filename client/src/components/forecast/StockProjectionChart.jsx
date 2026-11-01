@@ -1,36 +1,42 @@
-import { useI18n } from '../../i18n/I18nContext';
+// Line chart of how the current stock is expected to run down over the forecast days,
+// with the medication's reorder threshold as a dashed red line (FR 6.2). This is exactly the
+// calculation the reorder alert is based on. Drawn with the Recharts library.
+// Points below the threshold are drawn red.
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer } from 'recharts';
+import { useI18n } from '../../i18n/useI18n';
 
-const WIDTH = 720;
-const HEIGHT = 220;
-const PAD = { top: 14, right: 46, bottom: 30, left: 36 };
-
-/* Charts stay left to right in Arabic too: time running left to right is the
-   convention for charts in both languages. `direction: ltr` on the <svg> also
-   stops an RTL page from flipping every text-anchor. The legend is HTML and
-   follows the page direction. */
-
-/**
- * How the current stock is expected to run down over the forecast horizon, and
- * where it crosses the medication's reorder threshold - the calculation the
- * reorder alert itself is based on (FR 6.2).
- */
+// currentQuantity: units in stock now
+// threshold:       the reorder threshold
+// forecast:        [{ date, projected_stock }] - stock left at the end of each future day
+// asOfDate:        today's date (the first point of the line)
 export default function StockProjectionChart({ currentQuantity, threshold, forecast, asOfDate }) {
   const { t, formatDayMonth } = useI18n();
-  if (forecast.length === 0) return null;
+  if (forecast.length === 0) {
+    return null;
+  }
 
-  const points = [
-    { date: asOfDate, stock: Number(currentQuantity) },
-    ...forecast.map((row) => ({ date: row.date, stock: Number(row.projected_stock) })),
-  ];
+  // The line starts with today's stock, then one point per forecast day
+  const points = [{ date: asOfDate, stock: Number(currentQuantity) }];
+  for (const day of forecast) {
+    points.push({ date: day.date, stock: Number(day.projected_stock) });
+  }
 
-  const plotWidth = WIDTH - PAD.left - PAD.right;
-  const plotHeight = HEIGHT - PAD.top - PAD.bottom;
-  const max = Math.max(...points.map((point) => point.stock), Number(threshold), 1);
-  const step = plotWidth / Math.max(points.length - 1, 1);
-  const baseline = PAD.top + plotHeight;
-  const x = (index) => PAD.left + index * step;
-  const y = (value) => baseline - (value / max) * plotHeight;
-  const line = points.map((point, index) => `${x(index)},${y(point.stock)}`).join(' ');
+  // Draws one point of the line: red when the stock is below the threshold
+  function StockPoint({ cx, cy, payload }) {
+    const color = payload.stock < threshold ? 'var(--color-danger)' : 'var(--color-primary)';
+    return <circle key={payload.date} cx={cx} cy={cy} r={3.5} fill={color} />;
+  }
+
+  // The text shown when hovering over a point, e.g. "21 Sep: 12 units (below threshold)"
+  function tooltipText(value, seriesName, item) {
+    const key = value < threshold ? 'chart.pointBelow' : 'chart.barTitle';
+    return [t(key, { date: formatDayMonth(item.payload.date), count: value }), null];
+  }
+
+  // The first point is labelled "today" instead of a date
+  function xAxisLabel(date) {
+    return date === asOfDate ? t('chart.today') : formatDayMonth(date);
+  }
 
   return (
     <figure className="chart">
@@ -38,70 +44,41 @@ export default function StockProjectionChart({ currentQuantity, threshold, forec
         <span><i className="chart__swatch chart__swatch--actual" aria-hidden="true" /> {t('chart.projectedStock')}</span>
         <span><i className="chart__swatch chart__swatch--threshold" aria-hidden="true" /> {t('chart.threshold')}</span>
       </figcaption>
-      <svg
-        viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-        width="100%"
+      <div
         style={{ direction: 'ltr' }}
         role="img"
         aria-label={t('chart.projectionAria', { quantity: currentQuantity, threshold })}
       >
-        {[0, max / 2, max].map((tick) => (
-          <g key={tick}>
-            <line
-              x1={PAD.left}
-              x2={WIDTH - PAD.right}
-              y1={y(tick)}
-              y2={y(tick)}
-              stroke="var(--grid)"
-              strokeWidth="1"
+        <ResponsiveContainer width="100%" height={220}>
+          <LineChart data={points} margin={{ top: 14, right: 46, bottom: 0, left: 0 }}>
+            <CartesianGrid vertical={false} stroke="var(--grid)" />
+            <XAxis
+              dataKey="date"
+              tickFormatter={xAxisLabel}
+              interval="preserveStartEnd"
+              tick={{ fontSize: 10, fill: 'var(--color-muted)' }}
+              stroke="var(--color-border)"
             />
-            <text x={PAD.left - 6} y={y(tick) + 4} textAnchor="end" fontSize="10" fill="var(--color-muted)">
-              {Math.round(tick)}
-            </text>
-          </g>
-        ))}
-
-        <line
-          x1={PAD.left}
-          x2={WIDTH - PAD.right}
-          y1={y(threshold)}
-          y2={y(threshold)}
-          stroke="var(--color-danger)"
-          strokeWidth="1.5"
-          strokeDasharray="5 4"
-        />
-        <text x={WIDTH - PAD.right + 4} y={y(threshold) + 4} fontSize="10" fill="var(--color-danger)">
-          {threshold}
-        </text>
-
-        <polyline points={line} fill="none" stroke="var(--color-primary)" strokeWidth="2" />
-
-        {points.map((point, index) => (
-          <circle
-            key={point.date}
-            cx={x(index)}
-            cy={y(point.stock)}
-            r="3.5"
-            fill={point.stock < threshold ? 'var(--color-danger)' : 'var(--color-primary)'}
-          >
-            <title>
-              {t(point.stock < threshold ? 'chart.pointBelow' : 'chart.barTitle', {
-                date: formatDayMonth(point.date),
-                count: point.stock,
-              })}
-            </title>
-          </circle>
-        ))}
-
-        <line x1={PAD.left} x2={WIDTH - PAD.right} y1={baseline} y2={baseline} stroke="var(--color-border)" />
-
-        <text x={PAD.left} y={HEIGHT - 10} textAnchor="start" fontSize="10" fill="var(--color-muted)">
-          {t('chart.today')}
-        </text>
-        <text x={x(points.length - 1)} y={HEIGHT - 10} textAnchor="end" fontSize="10" fill="var(--color-muted)">
-          {formatDayMonth(points[points.length - 1].date)}
-        </text>
-      </svg>
+            <YAxis width={36} domain={[0, 'auto']} tick={{ fontSize: 10, fill: 'var(--color-muted)' }} stroke="none" />
+            <Tooltip formatter={tooltipText} labelFormatter={() => ''} separator="" />
+            <ReferenceLine
+              y={threshold}
+              stroke="var(--color-danger)"
+              strokeWidth={1.5}
+              strokeDasharray="5 4"
+              label={{ value: threshold, position: 'right', fontSize: 10, fill: 'var(--color-danger)' }}
+            />
+            <Line
+              dataKey="stock"
+              stroke="var(--color-primary)"
+              strokeWidth={2}
+              dot={StockPoint}
+              activeDot={{ r: 5 }}
+              isAnimationActive={false}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
     </figure>
   );
 }

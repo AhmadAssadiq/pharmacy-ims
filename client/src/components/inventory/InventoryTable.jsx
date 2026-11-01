@@ -1,7 +1,7 @@
 import { Fragment, useMemo, useState } from 'react';
 import BatchPanel from './BatchPanel';
 import StatusMark, { medicationStatuses } from '../StatusMark';
-import { useI18n } from '../../i18n/I18nContext';
+import { useI18n } from '../../i18n/useI18n';
 
 /* The runway's window: how far ahead the expiry track reaches. */
 const RUNWAY_DAYS = 180;

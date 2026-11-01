@@ -21,8 +21,10 @@
     "inStock": "In stock",
     "reorderAt": "Reorder at",
     "nextExpiry": "Next expiry",
-    "units": { "one": "{count} unit", "other": "{count} units" },
-    "medications": { "one": "{count} medication", "other": "{count} medications" },
+    "units_one": "{count} unit",
+    "units_other": "{count} units",
+    "medications_one": "{count} medication",
+    "medications_other": "{count} medications",
     "total": "Total {amount}"
   },
   "nav": {
@@ -45,9 +47,20 @@
   },
   "theme": {
     "label": "Theme: {current}. Switch to {next}",
-    "current": { "system": "System ({resolved})", "light": "Light", "dark": "Dark" },
-    "next": { "system": "system", "light": "light", "dark": "dark" },
-    "resolved": { "light": "light", "dark": "dark" }
+    "current": {
+      "system": "System ({resolved})",
+      "light": "Light",
+      "dark": "Dark"
+    },
+    "next": {
+      "system": "system",
+      "light": "light",
+      "dark": "dark"
+    },
+    "resolved": {
+      "light": "light",
+      "dark": "dark"
+    }
   },
   "language": {
     "switchTo": "العربية",
@@ -77,24 +90,20 @@
     "out": "Out of stock",
     "low": "Low stock",
     "expiredUnits": "{count} expired",
-    "expiresIn": { "one": "Expires in {count} d", "other": "Expires in {count} d" },
-    "expiredAgo": { "one": "Expired {count} d ago", "other": "Expired {count} d ago" }
+    "expiresIn_one": "Expires in {count} d",
+    "expiresIn_other": "Expires in {count} d",
+    "expiredAgo_one": "Expired {count} d ago",
+    "expiredAgo_other": "Expired {count} d ago"
   },
   "inventory": {
     "title": "Inventory",
     "receiveStock": "Receive stock",
-    "findingExpired": {
-      "one": "{count} medication is holding expired stock that cannot be dispensed.",
-      "other": "{count} medications are holding expired stock that cannot be dispensed."
-    },
-    "findingLow": {
-      "one": "{count} medication is at or below its reorder level.",
-      "other": "{count} medications are at or below their reorder level."
-    },
-    "findingExpiring": {
-      "one": "{count} medication has a lot expiring within {days} days. Nothing is below its reorder level.",
-      "other": "{count} medications have a lot expiring within {days} days. Nothing is below its reorder level."
-    },
+    "findingExpired_one": "<strong>{count}</strong> medication is holding expired stock that cannot be dispensed.",
+    "findingExpired_other": "<strong>{count}</strong> medications are holding expired stock that cannot be dispensed.",
+    "findingLow_one": "<strong>{count}</strong> medication is at or below its reorder level.",
+    "findingLow_other": "<strong>{count}</strong> medications are at or below their reorder level.",
+    "findingExpiring_one": "<strong>{count}</strong> medication has a lot expiring within {days} days. Nothing is below its reorder level.",
+    "findingExpiring_other": "<strong>{count}</strong> medications have a lot expiring within {days} days. Nothing is below its reorder level.",
     "findingClear": "Every medication is above its reorder level with no lot expiring within {days} days.",
     "kpiAll": "Medications",
     "kpiLow": "At or below reorder level",
@@ -179,19 +188,15 @@
     "selectMedication": "Select a medication...",
     "option": "{name} ({quantity} in stock)",
     "optionUnavailable": "{name} ({quantity} in stock - unavailable)",
-    "available": "{count} available",
+    "available": "<num>{count}</num> available",
     "checkingStock": "Checking stock...",
     "add": "Add to sale",
     "errorSelectFirst": "Select a medication first",
     "errorQuantityMin": "Enter a quantity of at least 1",
-    "errorOnlyAvailable": {
-      "one": "Only {count} unit of {name} available",
-      "other": "Only {count} units of {name} available"
-    },
-    "errorOnlyAvailableWithExisting": {
-      "one": "Only {count} unit of {name} available and {existing} already in this sale",
-      "other": "Only {count} units of {name} available and {existing} already in this sale"
-    },
+    "errorOnlyAvailable_one": "Only {count} unit of {name} available",
+    "errorOnlyAvailable_other": "Only {count} units of {name} available",
+    "errorOnlyAvailableWithExisting_one": "Only {count} unit of {name} available and {existing} already in this sale",
+    "errorOnlyAvailableWithExisting_other": "Only {count} units of {name} available and {existing} already in this sale",
     "errorEmpty": "Add at least one medication to the sale.",
     "current": "Current sale",
     "checkNote": "Check each lot before dispensing.",
@@ -199,8 +204,8 @@
     "currentCaption": "Medications in the sale being built, with the lots each will be drawn from.",
     "colDrawnFrom": "Drawn from (nearest expiry first)",
     "colLineTotal": "Line total",
-    "lotLine": "{take} from the lot expiring {date}",
-    "leftAfter": "— {count} left afterwards",
+    "lotLine": "<num>{take}</num> from the lot expiring <date>{date}</date>",
+    "leftAfter": "— <num>{count}</num> left afterwards",
     "summary": "{medications} · {units}",
     "review": "Review and dispense",
     "clear": "Clear sale",
@@ -211,9 +216,12 @@
     "colDate": "Date",
     "confirmTitle": "Dispense this sale?",
     "confirmLead": "Stock leaves the shelf now. This cannot be undone.",
-    "confirmButton": { "one": "Dispense {count} unit", "other": "Dispense {count} units" },
+    "confirmButton_one": "Dispense {count} unit",
+    "confirmButton_other": "Dispense {count} units",
     "goBack": "Go back",
-    "dispensed": "Dispensed {units} across {medications}, total {total}. Stock has been reduced."
+    "dispensed": "Dispensed {units} across {medications}, total {total}. Stock has been reduced.",
+    "basketUnits_one": "<num>{count}</num> unit",
+    "basketUnits_other": "<num>{count}</num> units"
   },
   "forecast": {
     "title": "Demand forecast",
@@ -225,8 +233,10 @@
     "historyDays": "Days of history",
     "forecast": "Forecast",
     "belowNow": "Below threshold now",
-    "belowIn": { "one": "Below threshold in {count} day", "other": "Below threshold in {count} days" },
-    "holds": { "one": "Stock holds for {count} day", "other": "Stock holds for {count} days" },
+    "belowIn_one": "Below threshold in {count} day",
+    "belowIn_other": "Below threshold in {count} days",
+    "holds_one": "Stock holds for {count} day",
+    "holds_other": "Stock holds for {count} days",
     "notEnoughData": "Not enough data",
     "mae": "Mean abs. error",
     "maeValue": "{value} units/day",
@@ -237,10 +247,8 @@
     "insufficientDefault": "Not enough sales history to train a model yet.",
     "insufficientNote": "The model needs at least 14 days of history before it will forecast, so no reorder alert is raised for this medication (UC-3 alternative flow).",
     "dailyDemand": "Daily demand",
-    "dailyNote": {
-      "one": "Units sold per day over the last 30 days, then the model's predicted demand for the next {count} day.",
-      "other": "Units sold per day over the last 30 days, then the model's predicted demand for the next {count} days."
-    },
+    "dailyNote_one": "Units sold per day over the last 30 days, then the model's predicted demand for the next {count} day.",
+    "dailyNote_other": "Units sold per day over the last 30 days, then the model's predicted demand for the next {count} days.",
     "monthly": "Monthly sales and seasonal outlook",
     "monthlyNote": "Units sold per month over the last two years, then the model's predicted demand for the next three months. The current month adds the prediction for its remaining days to the sales so far. Seasons are learnt once a medication has a year of history.",
     "projected": "Projected stock",
@@ -254,15 +262,20 @@
     "today": "today",
     "thisMonth": "this month",
     "monthlyAria": "Units sold per month from {from}, followed by predicted demand to {to}",
-    "monthTitle": { "one": "{month}: {count} unit", "other": "{month}: {count} units" },
-    "monthTitlePredicted": { "one": "{month}: {count} unit (predicted)", "other": "{month}: {count} units (predicted)" },
+    "monthTitle_one": "{month}: {count} unit",
+    "monthTitle_other": "{month}: {count} units",
+    "monthTitlePredicted_one": "{month}: {count} unit (predicted)",
+    "monthTitlePredicted_other": "{month}: {count} units (predicted)",
     "monthTitlePartial": "{month}: {sold} sold so far, {predicted} more predicted",
     "noSales": "No sales recorded for this medication yet.",
     "demandAria": "Daily units sold over the last {history} days, followed by {forecast} days of predicted demand",
     "projectionAria": "Projected stock falling from {quantity} units against a reorder threshold of {threshold}",
-    "barTitle": { "one": "{date}: {count} unit", "other": "{date}: {count} units" },
-    "barTitlePredicted": { "one": "{date}: {count} unit (predicted)", "other": "{date}: {count} units (predicted)" },
-    "pointBelow": { "one": "{date}: {count} unit (below threshold)", "other": "{date}: {count} units (below threshold)" }
+    "barTitle_one": "{date}: {count} unit",
+    "barTitle_other": "{date}: {count} units",
+    "barTitlePredicted_one": "{date}: {count} unit (predicted)",
+    "barTitlePredicted_other": "{date}: {count} units (predicted)",
+    "pointBelow_one": "{date}: {count} unit (below threshold)",
+    "pointBelow_other": "{date}: {count} units (below threshold)"
   },
   "alerts": {
     "title": "Reorder alerts",
@@ -270,10 +283,11 @@
     "loadError": "Couldn't load reorder alerts. {error}",
     "loading": "Loading alerts...",
     "none": "No reorder alerts. Nothing is forecast to fall below its reorder level in the next {days} days.",
-    "dayUnit": { "one": "day", "other": "days" },
+    "dayUnit_one": "day",
+    "dayUnit_other": "days",
     "alreadyBelow": "Already below its reorder level",
     "fallsOn": "Falls below its reorder level on {date}",
-    "stockLine": "{quantity} in stock, reorder at {threshold}",
+    "stockLine": "<num>{quantity}</num> in stock, reorder at <num>{threshold}</num>",
     "receive": "Receive stock",
     "dismiss": "Dismiss",
     "dismissLabel": "Dismiss the reorder alert for {name}"
@@ -307,7 +321,8 @@
     "pharmacistJoined": "A pharmacist has joined",
     "waitingForPharmacist": "Waiting for a pharmacist",
     "inboxTitle": "Chat inbox",
-    "activeSessions": { "one": "{count} active session", "other": "{count} active sessions" },
+    "activeSessions_one": "{count} active session",
+    "activeSessions_other": "{count} active sessions",
     "patients": "Patients",
     "sessionsLabel": "Chat sessions",
     "loadingSessions": "Loading sessions...",
@@ -326,10 +341,15 @@
     "outOfStock": "Out of stock"
   },
   "preorders": {
-    "status": { "pending": "Pending", "ready": "Ready to collect", "collected": "Collected", "cancelled": "Cancelled" },
+    "status": {
+      "pending": "Pending",
+      "ready": "Ready to collect",
+      "collected": "Collected",
+      "cancelled": "Cancelled"
+    },
     "mineTitle": "Your requests",
     "mineNote": "The pharmacy updates these as your medication comes in.",
-    "mineLine": "{quantity} requested on {date}",
+    "mineLine": "<num>{quantity}</num> requested on <date>{date}</date>",
     "request": "Request",
     "requestLabel": "Request {name}",
     "alreadyRequested": "Requested",
@@ -346,14 +366,10 @@
     "cancelTitle": "Cancel this request?",
     "cancelLead": "Your request for {name} will be withdrawn.",
     "staffTitle": "Preorders",
-    "findingReady": {
-      "one": "{count} request is ready and waiting to be collected.",
-      "other": "{count} requests are ready and waiting to be collected."
-    },
-    "findingPending": {
-      "one": "{count} request is waiting for stock.",
-      "other": "{count} requests are waiting for stock."
-    },
+    "findingReady_one": "<strong>{count}</strong> request is ready and waiting to be collected.",
+    "findingReady_other": "<strong>{count}</strong> requests are ready and waiting to be collected.",
+    "findingPending_one": "<strong>{count}</strong> request is waiting for stock.",
+    "findingPending_other": "<strong>{count}</strong> requests are waiting for stock.",
     "findingNone": "No open requests.",
     "staffEmpty": "No requests with this status.",
     "regionLabel": "Preorder requests, scrollable",
@@ -487,23 +503,17 @@
     "AUTH_REQUIRED": "Please sign in to continue.",
     "AUTH_INVALID_TOKEN": "Your session has ended. Sign in again.",
     "FORBIDDEN": "You do not have permission to do that.",
-    "AUTH_INVALID_CREDENTIALS": {
-      "one": "Invalid email or password. {count} attempt remaining.",
-      "other": "Invalid email or password. {count} attempts remaining."
-    },
-    "AUTH_LOCKED": {
-      "one": "Account temporarily locked. Try again in {count} minute.",
-      "other": "Account temporarily locked. Try again in {count} minutes."
-    },
+    "AUTH_INVALID_CREDENTIALS_one": "Invalid email or password. {count} attempt remaining.",
+    "AUTH_INVALID_CREDENTIALS_other": "Invalid email or password. {count} attempts remaining.",
+    "AUTH_LOCKED_one": "Account temporarily locked. Try again in {count} minute.",
+    "AUTH_LOCKED_other": "Account temporarily locked. Try again in {count} minutes.",
     "AUTH_TOO_MANY_ATTEMPTS": "Too many failed attempts. Account temporarily locked.",
     "AUTH_EMAIL_TAKEN": "An account with this email already exists.",
     "MEDICATION_NOT_FOUND": "This medication no longer exists. Refresh the page.",
     "BATCH_NOT_FOUND": "This stock lot no longer exists. Refresh the page.",
     "ALERT_NOT_FOUND": "This alert has already been dismissed.",
-    "STOCK_INSUFFICIENT": {
-      "one": "Only {count} unit of {name} can be dispensed.",
-      "other": "Only {count} units of {name} can be dispensed."
-    },
+    "STOCK_INSUFFICIENT_one": "Only {count} unit of {name} can be dispensed.",
+    "STOCK_INSUFFICIENT_other": "Only {count} units of {name} can be dispensed.",
     "CHAT_SESSION_NOT_FOUND": "This conversation no longer exists.",
     "CHAT_FORBIDDEN": "You do not have access to this conversation.",
     "MESSAGE_EMPTY": "Message cannot be empty.",
@@ -513,10 +523,8 @@
     "PREORDER_INVALID_TRANSITION": "This request has already moved on. Refresh the page.",
     "PREORDER_NOT_CANCELLABLE": "This request can no longer be cancelled; the pharmacy has already acted on it.",
     "RESET_TOKEN_INVALID": "This reset link is invalid, has expired or has already been used.",
-    "RATE_LIMITED": {
-      "one": "Too many attempts. Try again in {count} minute.",
-      "other": "Too many attempts. Try again in {count} minutes."
-    },
+    "RATE_LIMITED_one": "Too many attempts. Try again in {count} minute.",
+    "RATE_LIMITED_other": "Too many attempts. Try again in {count} minutes.",
     "ATTACHMENT_MISSING": "Choose an image to send.",
     "ATTACHMENT_TYPE": "Only image files can be sent: PNG, JPEG, WebP or GIF.",
     "ATTACHMENT_TOO_LARGE": "Images can be at most {count} MB.",

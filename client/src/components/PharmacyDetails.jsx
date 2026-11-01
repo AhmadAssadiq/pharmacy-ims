@@ -1,4 +1,4 @@
-import { useI18n } from '../i18n/I18nContext';
+import { useI18n } from '../i18n/useI18n';
 import { PHARMACY, localized, mapsUrl } from '../config/pharmacy';
 
 /** Opening hours as a definition list; a day with null hours reads "Closed". */

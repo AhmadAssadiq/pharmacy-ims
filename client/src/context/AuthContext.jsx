@@ -1,71 +1,84 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+// Who is signed in. Any component can read it with:
+//   const { user, login, logout } = useAuth();
+//
+// The user and their login token are saved in localStorage, so a page refresh keeps you
+// signed in. When the app opens, the user's details are refreshed from the server once
+// (so a phone number added since the last login shows up).
+import { createContext, useContext, useEffect, useState } from 'react';
 import { loadAuth, saveAuth } from '../api/client';
 import { loginRequest, meRequest, registerRequest } from '../api/auth';
 
 const AuthContext = createContext(null);
 
-/**
- * Holds the signed-in user and token, persists them in localStorage and
- * exposes login / register / logout to the rest of the app.
- *
- * The stored user is refreshed from /auth/me once on load, so details added
- * since sign-in (a phone number, a changed name) are current; updateUser
- * replaces it after the user edits their own details.
- */
 export function AuthProvider({ children }) {
-  const [auth, setAuth] = useState(() => loadAuth());
+  // { user, token } while signed in, null when signed out
+  const [auth, setAuth] = useState(loadAuth);
 
-  const applyAuth = useCallback((next) => {
-    saveAuth(next);
-    setAuth(next);
-  }, []);
+  // Saves the new sign-in state (or null to sign out) and updates the app
+  function changeAuth(newAuth) {
+    saveAuth(newAuth);
+    setAuth(newAuth);
+  }
 
-  const login = useCallback(async (credentials) => {
+  // Signs in with { email, password }. Returns the user.
+  async function login(credentials) {
     const result = await loginRequest(credentials);
-    applyAuth(result);
+    changeAuth(result);
     return result.user;
-  }, [applyAuth]);
+  }
 
-  const register = useCallback(async (payload) => {
-    const result = await registerRequest(payload);
-    applyAuth(result);
+  // Creates a patient account and signs in. Returns the user.
+  async function register(details) {
+    const result = await registerRequest(details);
+    changeAuth(result);
     return result.user;
-  }, [applyAuth]);
+  }
 
-  const logout = useCallback(() => applyAuth(null), [applyAuth]);
+  function logout() {
+    changeAuth(null);
+  }
 
-  const updateUser = useCallback((user) => {
-    setAuth((prev) => {
-      if (!prev) return prev;
-      const next = { ...prev, user };
-      saveAuth(next);
-      return next;
-    });
+  // Replaces the saved user (after they change their own details), keeping the same token
+  function updateUser(user) {
+    const saved = loadAuth();
+    if (saved) {
+      changeAuth({ ...saved, user });
+    }
+  }
+
+  // When the app opens: refresh the user's details from the server
+  useEffect(() => {
+    if (!loadAuth()) {
+      return;
+    }
+    meRequest()
+      .then((result) => updateUser(result.user))
+      .catch(() => {}); // an invalid token signs out through the event below
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // api/client.js fires 'pims:unauthorized' when the server rejects the login token:
+  // sign out then
   useEffect(() => {
-    if (!loadAuth()?.token) return;
-    meRequest()
-      .then(({ user }) => updateUser(user))
-      .catch(() => {}); // a rejected token signs out through the event below
-  }, [updateUser]);
+    function handleUnauthorized() {
+      changeAuth(null);
+    }
+    window.addEventListener('pims:unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('pims:unauthorized', handleUnauthorized);
+  }, []);
 
-  // The API client fires this event when the server rejects the token.
-  useEffect(() => {
-    window.addEventListener('pims:unauthorized', logout);
-    return () => window.removeEventListener('pims:unauthorized', logout);
-  }, [logout]);
-
-  const value = useMemo(
-    () => ({ user: auth?.user || null, token: auth?.token || null, login, register, logout, updateUser }),
-    [auth, login, register, logout, updateUser]
-  );
-
+  const value = {
+    user: auth ? auth.user : null,
+    token: auth ? auth.token : null,
+    login,
+    register,
+    logout,
+    updateUser,
+  };
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
+// Reads the sign-in state from any component inside <AuthProvider>
 export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used inside <AuthProvider>');
-  return ctx;
+  return useContext(AuthContext);
 }

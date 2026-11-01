@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { fetchAttachment } from '../../api/chat';
-import { useI18n } from '../../i18n/I18nContext';
+import { useI18n } from '../../i18n/useI18n';
 
 /**
  * An image in a chat bubble (GP2 addition). The file sits behind an
