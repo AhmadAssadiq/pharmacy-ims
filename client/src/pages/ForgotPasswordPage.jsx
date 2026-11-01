@@ -1,13 +1,11 @@
+// "Forgot password" (GP2 addition): the user types their email and a reset link is sent.
+// The page always says the same thing afterwards, so it never reveals which emails have accounts.
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { forgotPasswordRequest } from '../api/auth';
 import { useI18n } from '../i18n/useI18n';
 import constants from '../../../shared/constants.json';
 
-/**
- * Forgot password (GP2 addition). Whatever the email, the page says the same
- * thing afterwards, so it never tells anyone which addresses have accounts.
- */
 export default function ForgotPasswordPage() {
   const { t, te, lang } = useI18n();
   const [email, setEmail] = useState('');

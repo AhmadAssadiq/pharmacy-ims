@@ -1,14 +1,10 @@
+// The frame around the signed-out pages (login, register, password reset): no navigation
+// bar, just the contact link and the language and theme buttons at the top.
 import { Link, Outlet } from 'react-router-dom';
 import { useI18n } from '../i18n/useI18n';
 import LanguageToggle from './LanguageToggle';
 import ThemeToggle from './ThemeToggle';
 
-/**
- * Frame for the signed-out pages (Login, Register). They have no navigation bar,
- * but they still need the same skip link and `<main>` landmark as `Layout`, so
- * assistive technology finds the form the same way it finds every other page.
- * A patient picks a language before signing in, so the switches live here too.
- */
 export default function AuthLayout() {
   const { t } = useI18n();
   return (

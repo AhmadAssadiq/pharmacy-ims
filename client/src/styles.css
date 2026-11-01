@@ -274,7 +274,7 @@ a:hover { color: var(--link-hover); }
 .num { font-variant-numeric: tabular-nums; }
 
 /* Every number that is read or compared is tabular. */
-.table, .num, .kpi__value, .stat__value, input[type='number'] {
+.table, .num, .kpi__value, input[type='number'] {
   font-variant-numeric: tabular-nums;
 }
 
@@ -425,14 +425,7 @@ a:hover { color: var(--link-hover); }
 
 .page-finding strong { color: var(--text); font-weight: 500; }
 
-.grid-2 {
-  display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
-  gap: var(--gap);
-  align-items: start;
-}
 
-@media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } }
 
 /* ---------- Cards: a border or a tone step, never a shadow ---------- */
 .card {
@@ -502,7 +495,6 @@ a:hover { color: var(--link-hover); }
 .kpi__value--zero { color: var(--muted); }
 .kpi__value--alert { color: var(--negative); }
 
-.kpi__sub { display: block; font-size: var(--fs-small); color: var(--muted); margin-top: 4px; }
 
 @media (max-width: 900px) {
   .kpi-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -708,8 +700,7 @@ input[aria-invalid='true'], select[aria-invalid='true'] { border-color: var(--ne
 .badge--danger { background: var(--pill-negative-bg); color: var(--pill-negative-ink); }
 .badge--warning { background: var(--pill-warning-bg); color: var(--pill-warning-ink); }
 .badge--success { background: var(--pill-positive-bg); color: var(--pill-positive-ink); }
-.badge--muted, .badge--role { background: var(--pill-neutral-bg); color: var(--pill-neutral-ink); }
-.badge--role { text-transform: capitalize; }
+.badge--muted { background: var(--pill-neutral-bg); color: var(--pill-neutral-ink); }
 
 .badges { display: inline-flex; flex-wrap: wrap; gap: 4px; }
 
@@ -1062,7 +1053,6 @@ input[aria-invalid='true'], select[aria-invalid='true'] { border-color: var(--ne
 }
 
 .skeleton--kpi { height: var(--fs-kpi); width: 3ch; }
-.skeleton--row { height: 14px; width: 100%; }
 
 .status-line {
   display: inline-flex;
@@ -1123,6 +1113,15 @@ input[aria-invalid='true'], select[aria-invalid='true'] { border-color: var(--ne
 .chart__swatch--actual { background: var(--chart-3); }
 .chart__swatch--predicted { background: var(--chart-2); }
 .chart__swatch--threshold { background: var(--negative); }
+
+/* The box that appears when hovering over a chart (drawn by Recharts) follows the theme */
+.chart .recharts-default-tooltip {
+  background: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 6px;
+  color: var(--text);
+  font-size: var(--fs-small);
+}
 
 /* ---------- Auth ---------- */
 .auth-bar {

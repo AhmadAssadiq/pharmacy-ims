@@ -1,3 +1,4 @@
+// Calls to the server for medications and their stock lots (staff only).
 import { request } from './client';
 
 export const fetchMedications = () => request('/medications');

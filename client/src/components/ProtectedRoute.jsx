@@ -1,12 +1,9 @@
+// Guards the staff and patient pages: if you are not signed in you go to the login page
+// (FR 1); if you have the wrong role you go to your own home page (FR 2).
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { homePathForRole } from '../utils/routes';
 
-/**
- * Guards a group of routes. Unauthenticated users are sent to the login page
- * (FR 1); authenticated users with the wrong role are sent to their own home
- * page (FR 2).
- */
 export default function ProtectedRoute({ role }) {
   const { user } = useAuth();
   const location = useLocation();

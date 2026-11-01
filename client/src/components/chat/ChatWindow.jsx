@@ -1,3 +1,7 @@
+// The chat box used by both the patient chat page and the staff inbox: the list of messages
+// and the box to type in. It can also attach one image (GP2 addition); the image is checked
+// here for type and size first, but the server makes the final decision.
+// Message bubbles use flex start/end, so mine and theirs swap sides in Arabic.
 import { useEffect, useId, useRef, useState } from 'react';
 import { useI18n } from '../../i18n/useI18n';
 import ChatImage from './ChatImage';
@@ -24,11 +28,6 @@ export function PresenceMark({ online, label }) {
   );
 }
 
-/**
- * The composer can carry one image (GP2 addition). It is checked here for type
- * and size before upload, which is only a courtesy: the server sniffs the
- * bytes and decides. The text box doubles as the image's optional caption.
- */
 export default function ChatWindow({
   title,
   subtitle,

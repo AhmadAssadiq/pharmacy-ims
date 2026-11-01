@@ -1,13 +1,9 @@
+// An image inside a chat message (GP2 addition). Images need the login token, so it is
+// downloaded as a Blob and shown from a temporary blob: URL. Clicking it opens it full size.
 import { useEffect, useState } from 'react';
 import { fetchAttachment } from '../../api/chat';
 import { useI18n } from '../../i18n/useI18n';
 
-/**
- * An image in a chat bubble (GP2 addition). The file sits behind an
- * authenticated route, so it is fetched with the bearer token, shown from a
- * blob URL, and the URL is revoked when the bubble unmounts. Clicking opens it
- * full size in a new tab. The alt text names who sent it, never the filename.
- */
 export default function ChatImage({ attachment, alt }) {
   const { t } = useI18n();
   const [url, setUrl] = useState(null);

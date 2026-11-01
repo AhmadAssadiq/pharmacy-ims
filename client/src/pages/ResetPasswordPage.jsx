@@ -1,3 +1,5 @@
+// Choosing a new password after opening the link from the reset email (GP2 addition).
+// The token comes from the link (?token=...). Afterwards the user signs in again.
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { resetPasswordRequest } from '../api/auth';
@@ -6,11 +8,6 @@ import constants from '../../../shared/constants.json';
 
 const { PASSWORD_MIN_LENGTH } = constants;
 
-/**
- * Choose a new password from a reset link (GP2 addition). The token is read
- * once from ?token= and then removed from the address bar, so it does not stay
- * in the browser history. Success goes to the login page; it never signs in.
- */
 export default function ResetPasswordPage() {
   const { t, te } = useI18n();
   const navigate = useNavigate();

@@ -1,17 +1,10 @@
+// The 404 page, shown for any address that does not exist (GP2 addition).
 import { useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useI18n } from '../i18n/useI18n';
 import { homePathForRole, ROLES } from '../utils/routes';
 
-/**
- * A real 404 for unknown addresses (GP2 addition), in the signed-in frame or
- * the signed-out one (see UserFrame). It names the address that was asked for
- * and offers one way back: the user's home page, or the login page.
- *
- * A wrong-role page (a patient opening /staff/inventory) is not a 404 - that
- * route exists, and ProtectedRoute still sends them to their own home.
- */
 export default function NotFoundPage() {
   const { user } = useAuth();
   const { t } = useI18n();

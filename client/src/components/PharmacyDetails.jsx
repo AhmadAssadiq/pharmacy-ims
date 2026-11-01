@@ -1,3 +1,5 @@
+// The pharmacy's address, phone, email, opening hours and licence number, read from
+// config/pharmacy.js. Shown on the About and Contact pages.
 import { useI18n } from '../i18n/useI18n';
 import { PHARMACY, localized, mapsUrl } from '../config/pharmacy';
 
@@ -16,11 +18,6 @@ export function OpeningHours() {
   );
 }
 
-/**
- * How to reach the pharmacy (GP2 addition): phone as a tel: link, email as a
- * mailto: link, the address with a plain "Open in Maps" link, all from
- * config/pharmacy.js. Shared by the About and Contact pages.
- */
 export default function PharmacyDetails() {
   const { t, lang } = useI18n();
   return (

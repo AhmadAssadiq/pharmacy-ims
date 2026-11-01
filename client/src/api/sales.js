@@ -1,3 +1,4 @@
+// Calls to the server for selling: recent sales, record a sale, and preview which lots a line uses.
 import { request } from './client';
 
 export const fetchRecentSales = () => request('/sales');

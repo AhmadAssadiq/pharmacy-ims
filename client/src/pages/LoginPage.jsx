@@ -1,3 +1,5 @@
+// The login page (FR 1). After signing in you go to your home page (or back to the page you
+// were trying to open). 5 wrong passwords lock the account for 15 minutes (the server decides).
 import { useEffect, useRef, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';

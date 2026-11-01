@@ -1,20 +1,18 @@
-import { useCallback, useEffect, useState } from 'react';
+// The "Add stock" page (FR 3.1, UC-1): one place to put stock on the shelf. Staff either
+//   - choose a medication the pharmacy already has, and receive another lot of it, or
+//   - choose "new medication", and add it to the catalogue with its first lot.
+// The chosen medication is kept in the address (?medication=12), so the "Receive stock"
+// button of a reorder alert opens this page with that medication already chosen.
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { createMedication, fetchMedications } from '../../api/medications';
 import MedicationForm from '../../components/inventory/MedicationForm';
 import BatchPanel from '../../components/inventory/BatchPanel';
 import { useI18n } from '../../i18n/useI18n';
 
+// The drop-down value meaning "a medication we do not have yet"
 const NEW_MEDICATION = 'new';
 
-/**
- * Stock intake (FR 3.1, UC-1). One page for putting stock on the shelf: either
- * receive another lot of a medication the pharmacy already carries, or add a
- * medication the catalog does not have yet together with its first lot.
- *
- * The selection lives in the query string (`?medication=<id>`), so a reorder
- * alert's "Receive stock" link opens the page with that medication chosen.
- */
 export default function StaffStockPage() {
   const { t, te, formatDate } = useI18n();
   const [medications, setMedications] = useState([]);
@@ -24,46 +22,51 @@ export default function StaffStockPage() {
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState(null);
 
-  const load = useCallback(async () => {
+  // Loads (or reloads) the medication list for the drop-down
+  async function loadMedications() {
     const data = await fetchMedications();
     setMedications(data.medications);
-    return data.medications;
-  }, []);
+  }
 
   useEffect(() => {
-    load()
-      .catch((err) => setError(err))
+    loadMedications()
+      .catch((loadError) => setError(loadError))
       .finally(() => setLoading(false));
-  }, [load]);
+  }, []);
 
-  const flash = (message) => {
+  // Shows a green message for 4 seconds
+  function showNotice(message) {
     setNotice(message);
     setTimeout(() => setNotice(null), 4000);
-  };
+  }
 
-  const target = searchParams.get('medication') ?? '';
-  const setTarget = (value) =>
+  // The choice in the drop-down, read from and saved to the address (?medication=...)
+  const choice = searchParams.get('medication') ?? '';
+  function changeChoice(value) {
     setSearchParams(value ? { medication: value } : {}, { replace: true });
+  }
 
-  const selected = medications.find((m) => String(m.id) === String(target));
+  const chosenMedication = medications.find((medication) => String(medication.id) === String(choice));
 
-  const handleCreate = async (payload) => {
+  // Adds a new medication with its first lot (the form shows any errors itself)
+  async function handleCreate(details) {
     setSaving(true);
     try {
-      const data = await createMedication(payload);
-      await load();
-      // Jump to the medication just created so more lots can be added to it.
-      setTarget(String(data.medication.id));
-      flash(t('stock.added', { name: data.medication.name }));
+      const data = await createMedication(details);
+      await loadMedications();
+      // Switch to the new medication, so more lots can be added to it straight away
+      changeChoice(String(data.medication.id));
+      showNotice(t('stock.added', { name: data.medication.name }));
     } finally {
       setSaving(false);
     }
-  };
+  }
 
-  const handleBatchesChanged = async () => {
-    await load();
-    flash(t('stock.lotsUpdated'));
-  };
+  // After a lot is added, corrected or removed: refresh the totals
+  async function handleLotsChanged() {
+    await loadMedications();
+    showNotice(t('stock.lotsUpdated'));
+  }
 
   return (
     <>
@@ -75,6 +78,7 @@ export default function StaffStockPage() {
       {notice && <div className="alert alert--success" role="status">{notice}</div>}
       {error && <div className="alert alert--error" role="alert">{te(error)}</div>}
 
+      {/* Step 1: which medication? */}
       <div className="card">
         <h2>{t('stock.question')}</h2>
         {loading ? (
@@ -82,13 +86,13 @@ export default function StaffStockPage() {
         ) : (
           <label className="field">
             <span className="field__label">{t('common.medication')}</span>
-            <select value={target} onChange={(e) => setTarget(e.target.value)}>
+            <select value={choice} onChange={(event) => changeChoice(event.target.value)}>
               <option value="">{t('stock.select')}</option>
               <option value={NEW_MEDICATION}>{t('stock.newOption')}</option>
               <optgroup label={t('stock.inCatalog')}>
-                {medications.map((med) => (
-                  <option key={med.id} value={med.id}>
-                    {t('stock.option', { name: med.name, quantity: med.quantity })}
+                {medications.map((medication) => (
+                  <option key={medication.id} value={medication.id}>
+                    {t('stock.option', { name: medication.name, quantity: medication.quantity })}
                   </option>
                 ))}
               </optgroup>
@@ -97,38 +101,38 @@ export default function StaffStockPage() {
         )}
       </div>
 
-      {target === NEW_MEDICATION && (
-        <MedicationForm onSubmit={handleCreate} submitting={saving} />
-      )}
+      {/* Step 2a: a new medication */}
+      {choice === NEW_MEDICATION && <MedicationForm onSubmit={handleCreate} submitting={saving} />}
 
-      {selected && (
+      {/* Step 2b: an existing medication - its current stock, then its lots */}
+      {chosenMedication && (
         <>
           <div className="card">
-            <h2><bdi>{selected.name}</bdi></h2>
+            <h2><bdi>{chosenMedication.name}</bdi></h2>
             <div className="stock-summary">
               <div>
                 <span className="field__label">{t('common.inStock')}</span>
-                <strong>{selected.quantity}</strong>
+                <strong>{chosenMedication.quantity}</strong>
               </div>
               <div>
                 <span className="field__label">{t('common.reorderAt')}</span>
-                <strong>{selected.low_stock_threshold}</strong>
+                <strong>{chosenMedication.low_stock_threshold}</strong>
               </div>
               <div>
                 <span className="field__label">{t('common.nextExpiry')}</span>
-                <strong>{formatDate(selected.expiry_date)}</strong>
+                <strong>{formatDate(chosenMedication.expiry_date)}</strong>
               </div>
-              {selected.expired_quantity > 0 && (
+              {chosenMedication.expired_quantity > 0 && (
                 <div>
                   <span className="field__label">{t('stock.expiredUnits')}</span>
-                  <strong className="text-danger">{selected.expired_quantity}</strong>
+                  <strong className="text-danger">{chosenMedication.expired_quantity}</strong>
                 </div>
               )}
             </div>
           </div>
 
           <div className="card">
-            <BatchPanel medication={selected} onChanged={handleBatchesChanged} />
+            <BatchPanel medication={chosenMedication} onChanged={handleLotsChanged} />
           </div>
         </>
       )}

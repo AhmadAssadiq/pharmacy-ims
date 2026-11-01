@@ -1,3 +1,5 @@
+// Calls to the server for chat: open a conversation, list conversations and messages, send
+// text or an image, and download an image (images need the login token, so they come as a Blob).
 import { fetchBlob, request } from './client';
 
 export const openMySession = () => request('/chat/sessions', { method: 'POST' });

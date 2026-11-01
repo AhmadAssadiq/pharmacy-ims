@@ -1,10 +1,7 @@
+// A patient's phone number as a tap-to-call link for staff (GP2 addition), or "no phone
+// number" when there is none.
 import { useI18n } from '../i18n/useI18n';
 
-/**
- * A patient's phone number as a tap-to-call link for staff (GP2 addition), or
- * a plain note when the patient has not given one yet. Numbers always read
- * left to right, Arabic page or not.
- */
 export default function PhoneLink({ phone }) {
   const { t } = useI18n();
   if (!phone) return <span className="muted">{t('phone.none')}</span>;

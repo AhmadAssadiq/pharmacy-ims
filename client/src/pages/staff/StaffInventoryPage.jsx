@@ -1,24 +1,33 @@
-import StyledText from '../../components/StyledText';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+// The staff inventory page (FR 2.1, FR 3, FR 4) - the first page staff see.
+//
+// It answers "what needs action today?":
+//   1. a one-line finding at the top (the most urgent thing),
+//   2. four numbers (all / low / expiring / expired) that also work as filters,
+//   3. the reorder alerts from the forecast,
+//   4. the stock table (with search and filters), where medications can be edited or deleted.
+// After every change the list is loaded again, so the warning flags are never out of date.
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { deleteMedication, fetchMedications, updateMedication } from '../../api/medications';
 import InventoryTable from '../../components/inventory/InventoryTable';
 import MedicationForm from '../../components/inventory/MedicationForm';
 import ReorderAlertPanel from '../../components/alerts/ReorderAlertPanel';
+import StyledText from '../../components/StyledText';
 import { useI18n } from '../../i18n/useI18n';
 import constants from '../../../../shared/constants.json';
 
 const { NEAR_EXPIRY_DAYS } = constants;
 
-/* The filters are bound to the flags the server already computes, so the
-   counts in the KPI strip and the chips can never disagree with the table. */
+// The four filters. They use the flags the server already worked out, so the numbers at
+// the top can never disagree with the table.
 const FILTERS = {
   all: () => true,
-  low: (m) => m.is_low_stock,
-  expiring: (m) => m.is_near_expiry,
-  expired: (m) => m.expired_quantity > 0,
+  low: (medication) => medication.is_low_stock,
+  expiring: (medication) => medication.is_near_expiry,
+  expired: (medication) => medication.expired_quantity > 0,
 };
 
+// The magnifying glass in the search box
 function SearchIcon() {
   return (
     <svg width="15" height="15" viewBox="0 0 15 15" aria-hidden="true" focusable="false">
@@ -28,109 +37,114 @@ function SearchIcon() {
   );
 }
 
-/**
- * Staff inventory (FR 2.1, FR 3, FR 4).
- *
- * The screen's one question: what needs action today? The KPI strip answers it
- * first, its cells double as the table's filters, and the table below is the
- * evidence. Every change re-fetches, so the flags are never stale.
- */
 export default function StaffInventoryPage() {
   const { t, te } = useI18n();
   const [medications, setMedications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState(null);
-  const [editing, setEditing] = useState(null);
+  const [editing, setEditing] = useState(null); // the medication being edited, or null
   const [saving, setSaving] = useState(false);
-  const [query, setQuery] = useState('');
+  const [searchText, setSearchText] = useState('');
   const [filter, setFilter] = useState('all');
   const formRef = useRef(null);
 
-  const load = useCallback(async () => {
+  // Loads (or reloads) every medication with its stock and flags
+  async function loadMedications() {
     try {
       const data = await fetchMedications();
       setMedications(data.medications);
       setError(null);
-    } catch (err) {
-      setError(err);
+    } catch (loadError) {
+      setError(loadError);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }
 
   useEffect(() => {
-    load();
-  }, [load]);
+    loadMedications();
+  }, []);
 
-  const flash = (message) => {
+  // Shows a green message for 6 seconds
+  function showNotice(message) {
     setNotice(message);
     setTimeout(() => setNotice(null), 6000);
-  };
+  }
 
-  const handleUpdate = async (payload) => {
+  // Saves the edit form (errors are shown by the form itself)
+  async function handleUpdate(details) {
     setSaving(true);
     try {
-      await updateMedication(editing.id, payload);
-      await load();
+      await updateMedication(editing.id, details);
+      await loadMedications();
       setEditing(null);
-      flash(t('inventory.updated'));
+      showNotice(t('inventory.updated'));
     } finally {
       setSaving(false);
     }
-  };
+  }
 
-  const handleDelete = async (med) => {
-    if (!window.confirm(t('inventory.confirmDelete', { name: med.name }))) return;
+  async function handleDelete(medication) {
+    if (!window.confirm(t('inventory.confirmDelete', { name: medication.name }))) {
+      return;
+    }
     try {
-      await deleteMedication(med.id);
-      if (editing?.id === med.id) setEditing(null);
-      await load();
-      flash(t('inventory.deleted', { name: med.name }));
-    } catch (err) {
-      setError(err);
+      await deleteMedication(medication.id);
+      if (editing && editing.id === medication.id) {
+        setEditing(null);
+      }
+      await loadMedications();
+      showNotice(t('inventory.deleted', { name: medication.name }));
+    } catch (deleteError) {
+      setError(deleteError);
     }
+  }
+
+  // Opens the edit form below the table and scrolls to it
+  function startEditing(medication) {
+    setEditing(medication);
+    if (formRef.current) {
+      formRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  // How many medications match each filter
+  const counts = {
+    all: medications.length,
+    low: medications.filter(FILTERS.low).length,
+    expiring: medications.filter(FILTERS.expiring).length,
+    expired: medications.filter(FILTERS.expired).length,
   };
 
-  const startEdit = (med) => {
-    setEditing(med);
-    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
-
-  const counts = useMemo(
-    () => ({
-      all: medications.length,
-      low: medications.filter(FILTERS.low).length,
-      expiring: medications.filter(FILTERS.expiring).length,
-      expired: medications.filter(FILTERS.expired).length,
-    }),
-    [medications]
-  );
-
-  const visible = useMemo(() => {
-    const term = query.trim().toLowerCase();
-    return medications.filter(FILTERS[filter]).filter((m) => {
-      if (!term) return true;
-      return (
-        m.name.toLowerCase().includes(term) ||
-        m.category.toLowerCase().includes(term) ||
-        String(m.supplier_info).toLowerCase().includes(term)
-      );
-    });
-  }, [medications, query, filter]);
-
-  /* The screen's one finding: the most urgent thing in today's data. */
-  const finding = (() => {
-    if (loading || error) return null;
-    // The count is shown in bold (see components/StyledText.jsx)
-    if (counts.expired > 0) return <StyledText id="inventory.findingExpired" count={counts.expired} />;
-    if (counts.low > 0) return <StyledText id="inventory.findingLow" count={counts.low} />;
-    if (counts.expiring > 0) {
-      return <StyledText id="inventory.findingExpiring" count={counts.expiring} values={{ days: NEAR_EXPIRY_DAYS }} />;
+  // The rows to show: the chosen filter, then the search text (name, category or supplier)
+  const search = searchText.trim().toLowerCase();
+  const visibleMedications = medications.filter(FILTERS[filter]).filter((medication) => {
+    if (!search) {
+      return true;
     }
-    return t('inventory.findingClear', { days: NEAR_EXPIRY_DAYS });
-  })();
+    return (
+      medication.name.toLowerCase().includes(search) ||
+      medication.category.toLowerCase().includes(search) ||
+      String(medication.supplier_info).toLowerCase().includes(search)
+    );
+  });
 
+  // The one-line finding at the top: the most urgent thing first (counts shown in bold)
+  let finding = null;
+  if (!loading && !error) {
+    if (counts.expired > 0) {
+      finding = <StyledText id="inventory.findingExpired" count={counts.expired} />;
+    } else if (counts.low > 0) {
+      finding = <StyledText id="inventory.findingLow" count={counts.low} />;
+    } else if (counts.expiring > 0) {
+      finding = <StyledText id="inventory.findingExpiring" count={counts.expiring} values={{ days: NEAR_EXPIRY_DAYS }} />;
+    } else {
+      finding = t('inventory.findingClear', { days: NEAR_EXPIRY_DAYS });
+    }
+  }
+
+  // The four numbers at the top. `tone` greys out a zero, or makes expired stock red.
   const kpis = [
     { key: 'all', label: t('inventory.kpiAll'), value: counts.all, tone: '' },
     { key: 'low', label: t('inventory.kpiLow'), value: counts.low, tone: counts.low ? '' : 'zero' },
@@ -140,14 +154,10 @@ export default function StaffInventoryPage() {
       value: counts.expiring,
       tone: counts.expiring ? '' : 'zero',
     },
-    {
-      key: 'expired',
-      label: t('inventory.kpiExpired'),
-      value: counts.expired,
-      tone: counts.expired ? 'alert' : 'zero',
-    },
+    { key: 'expired', label: t('inventory.kpiExpired'), value: counts.expired, tone: counts.expired ? 'alert' : 'zero' },
   ];
 
+  // The filter buttons above the table
   const chips = [
     { key: 'all', label: t('inventory.chipAll') },
     { key: 'low', label: t('inventory.chipLow') },
@@ -178,23 +188,15 @@ export default function StaffInventoryPage() {
         </div>
       )}
 
-      {/* KPIs double as the table's filters: one click shows the rows behind a number. */}
+      {/* The four numbers - clicking one shows the matching rows in the table */}
       <div className="kpi-strip">
         {kpis.map((kpi) => (
-          <button
-            key={kpi.key}
-            type="button"
-            className="kpi"
-            aria-pressed={filter === kpi.key}
-            onClick={() => setFilter(kpi.key)}
-          >
+          <button key={kpi.key} type="button" className="kpi" aria-pressed={filter === kpi.key} onClick={() => setFilter(kpi.key)}>
             <span className="kpi__label">{kpi.label}</span>
             {loading ? (
               <span className="skeleton skeleton--kpi" aria-hidden="true" />
             ) : (
-              <span className={`kpi__value ${kpi.tone ? `kpi__value--${kpi.tone}` : ''}`}>
-                {kpi.value}
-              </span>
+              <span className={`kpi__value ${kpi.tone ? `kpi__value--${kpi.tone}` : ''}`}>{kpi.value}</span>
             )}
           </button>
         ))}
@@ -208,31 +210,28 @@ export default function StaffInventoryPage() {
           <span className="card__note">{t('inventory.stockNote')}</span>
         </div>
 
+        {/* Search box, filter buttons and "x of y shown" */}
         <div className="toolbar">
           <div className="toolbar__search">
             <SearchIcon />
             <input
               type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              value={searchText}
+              onChange={(event) => setSearchText(event.target.value)}
               placeholder={t('inventory.searchPlaceholder')}
               aria-label={t('inventory.searchLabel')}
             />
           </div>
           {chips.map((chip) => (
-            <button
-              key={chip.key}
-              type="button"
-              className="chip"
-              aria-pressed={filter === chip.key}
-              onClick={() => setFilter(chip.key)}
-            >
+            <button key={chip.key} type="button" className="chip" aria-pressed={filter === chip.key} onClick={() => setFilter(chip.key)}>
               {chip.label}
               <span className="chip__count">{counts[chip.key]}</span>
             </button>
           ))}
           <span className="toolbar__count" aria-live="polite">
-            {loading ? t('inventory.loadingCount') : t('inventory.shown', { shown: visible.length, total: counts.all })}
+            {loading
+              ? t('inventory.loadingCount')
+              : t('inventory.shown', { shown: visibleMedications.length, total: counts.all })}
           </span>
         </div>
 
@@ -240,14 +239,15 @@ export default function StaffInventoryPage() {
           <p className="empty">{t('inventory.loadingInventory')}</p>
         ) : (
           <InventoryTable
-            medications={visible}
-            onEdit={startEdit}
+            medications={visibleMedications}
+            onEdit={startEditing}
             onDelete={handleDelete}
-            onBatchesChanged={load}
+            onBatchesChanged={loadMedications}
           />
         )}
       </div>
 
+      {/* The edit form appears here when "Edit" is clicked in the table */}
       <div ref={formRef} style={{ scrollMarginTop: 24 }}>
         {editing && (
           <MedicationForm

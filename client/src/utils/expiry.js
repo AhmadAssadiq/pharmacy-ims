@@ -1,3 +1,5 @@
+// Helpers for a stock lot's expiry: how many days are left, and whether it is expired,
+// expiring soon (within 30 days) or fine.
 import constants from '../../../shared/constants.json';
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;

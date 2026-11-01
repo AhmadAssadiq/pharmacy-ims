@@ -1,17 +1,13 @@
+// A pop-up asking "are you sure?" before an action that cannot be undone (selling,
+// cancelling, deleting). While it is open, the Tab key stays inside it, Escape closes it,
+// the page behind it does not scroll, and afterwards the focus goes back to the button
+// that opened it.
 import { useEffect, useRef } from 'react';
 import { useI18n } from '../i18n/useI18n';
 
 const FOCUSABLE =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-/**
- * A modal confirmation for an action that cannot be undone.
- *
- * Keyboard behaviour is the whole point of a gate like this: Escape cancels,
- * Tab is trapped inside, focus lands on Cancel rather than on the commit
- * button so a stray Enter does nothing, and focus returns to whatever opened
- * the dialog when it closes.
- */
 export default function ConfirmDialog({
   open,
   title,

@@ -1,13 +1,9 @@
+// The patient's About page (GP2 addition): who the pharmacy is and how to reach it.
 import { Link } from 'react-router-dom';
 import { useI18n } from '../../i18n/useI18n';
 import { PHARMACY, localized } from '../../config/pharmacy';
 import PharmacyDetails, { OpeningHours } from '../../components/PharmacyDetails';
 
-/**
- * About the pharmacy, for patients (GP2 addition). The copy describes only
- * what this portal does; every fact about the pharmacy itself comes from
- * config/pharmacy.js, which ships with placeholders.
- */
 export default function PatientAboutPage() {
   const { t, lang } = useI18n();
   const name = localized(PHARMACY.name, lang);

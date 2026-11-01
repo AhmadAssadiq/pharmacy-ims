@@ -4,9 +4,11 @@ Source: "Global Pharmacy Sales Dataset (2020-2025)" on Kaggle (annemark),
 https://www.kaggle.com/datasets/annemark/global-pharmacy-sales-dataset-20202025
 - a synthetic daily dataset of units sold per medicine, region, country and age
 group. The raw CSV is not committed (its licence is listed as "Unknown");
-download it into data/raw/ and run:
+download it into data/raw/ and run, from the repository root (pandas comes with the ML service):
 
-    py -3.12 -I data/prepare_demo_sales.py data/raw/global_pharmacy_sales_2020_2025_daily_dataset.csv
+    ml-service/venv/Scripts/python -I data/prepare_demo_sales.py data/raw/global_pharmacy_sales_2020_2025_daily_dataset.csv
+
+The app itself never runs this script: it only reads the demo-sales.json it produces.
 
 Steps, all printed as they run:
 
@@ -32,18 +34,18 @@ Steps, all printed as they run:
    and seasons continue smoothly. The app reads the file by calendar date, so
    its 2022-2025 history is the cleaned source data itself.
 
-Only the standard library is used.
+pandas does the cleaning (steps 1-4); the rest is plain Python.
 """
 from __future__ import annotations
 
-import csv
 import json
 import math
 import random
 import sys
-from collections import defaultdict
 from datetime import date, timedelta
 from pathlib import Path
+
+import pandas as pd
 
 FIRST_DAY = date(2022, 1, 1)
 SOURCE_LAST_DAY = date(2025, 12, 31)  # last day of the cleaned source data
@@ -87,64 +89,55 @@ PROFILES = {
 }
 
 
-def read_rows(path: Path) -> list[dict]:
-    with path.open(newline="", encoding="utf-8") as f:
-        return list(csv.DictReader(f))
-
-
-def percentile(sorted_values: list[float], q: float) -> float:
-    pos = (len(sorted_values) - 1) * q
-    lo, hi = math.floor(pos), math.ceil(pos)
-    return sorted_values[lo] + (sorted_values[hi] - sorted_values[lo]) * (pos - lo)
-
-
-def clean(rows: list[dict]) -> list[dict]:
-    seen, unique = set(), []
-    for row in rows:
-        key = tuple(row.values())
-        if key not in seen:
-            seen.add(key)
-            unique.append(row)
+def clean(path: Path) -> pd.DataFrame:
+    """Steps 1-3: reads the Kaggle CSV and cleans it. Returns the rows that are kept, with a new
+    `units` column holding units_sold after the outliers are capped."""
+    # Read every column as text first, so "exact duplicate" means exactly the same line
+    rows = pd.read_csv(path, dtype=str)
     print(f"  rows read                 {len(rows):>7}")
+
+    # 1. Remove rows that appear more than once
+    unique = rows.drop_duplicates()
     print(f"  exact duplicates dropped  {len(rows) - len(unique):>7}")
 
-    kept = [r for r in unique if FIRST_DAY.isoformat() <= r["date"] <= SOURCE_LAST_DAY.isoformat()]
-    covid_left = sum(r["covid_flag"] == "1" for r in kept)
+    # 2. Keep only 2022-2025 (the dates are YYYY-MM-DD text, so text comparison works)
+    in_range = (unique["date"] >= FIRST_DAY.isoformat()) & (unique["date"] <= SOURCE_LAST_DAY.isoformat())
+    kept = unique[in_range].copy()
+    covid_left = int((kept["covid_flag"] == "1").sum())
     print(f"  2020-2021 rows dropped    {len(unique) - len(kept):>7}  (COVID-flagged rows left: {covid_left})")
 
-    by_medicine = defaultdict(list)
-    for r in kept:
-        by_medicine[r["medicine"]].append(float(r["units_sold"]))
-    caps = {}
-    for medicine, values in by_medicine.items():
-        values.sort()
-        q1, q3 = percentile(values, 0.25), percentile(values, 0.75)
-        caps[medicine] = q3 + 3 * (q3 - q1)
-    capped = 0
-    for r in kept:
-        units = float(r["units_sold"])
-        if units > caps[r["medicine"]]:
-            capped += 1
-            units = caps[r["medicine"]]
-        r["units"] = units
+    # 3. Cap outliers per medicine: anything above Q3 + 3 x IQR is lowered to that value
+    #    (Q1 / Q3 = the 25% / 75% points of that medicine's values, IQR = Q3 - Q1)
+    kept["units"] = kept["units_sold"].astype(float)
+    q1 = kept.groupby("medicine")["units"].transform(lambda values: values.quantile(0.25))
+    q3 = kept.groupby("medicine")["units"].transform(lambda values: values.quantile(0.75))
+    cap = q3 + 3 * (q3 - q1)
+    capped = int((kept["units"] > cap).sum())
+    kept["units"] = kept["units"].where(kept["units"] <= cap, cap)
     print(f"  outliers capped           {capped:>7}  (Q3 + 3 x IQR per medicine)")
     print(f"  rows used                 {len(kept):>7}")
     return kept
 
 
-def daily_variation(rows: list[dict]) -> dict[str, dict[date, float]]:
-    """Per medicine: each day's total divided by the mean of its calendar month."""
-    totals = defaultdict(lambda: defaultdict(float))
-    for r in rows:
-        totals[r["medicine"]][date.fromisoformat(r["date"])] += r["units"]
+def daily_variation(rows: pd.DataFrame) -> dict[str, dict[date, float]]:
+    """Step 4: each medicine's daily total divided by the average day of that month.
+
+    1.2 means "20% busier than an average day that month". Dividing by the month's average
+    removes the source's own seasons (the same for every medicine) and keeps only the
+    day-to-day ups and downs. Returns { medicine: { date: variation } }.
+    """
+    # Total units per medicine per day (each day has one row per region)
+    daily = rows.groupby(["medicine", "date"], sort=False)["units"].sum().reset_index()
+    daily["day"] = pd.to_datetime(daily["date"])
+
+    # The average day of each medicine's calendar month
+    month_key = [daily["medicine"], daily["day"].dt.year, daily["day"].dt.month]
+    month_average = daily.groupby(month_key)["units"].transform("mean")
+    daily["variation"] = daily["units"] / month_average
 
     variation = {}
-    for medicine, days in totals.items():
-        month_days = defaultdict(list)
-        for day, value in days.items():
-            month_days[(day.year, day.month)].append(value)
-        month_mean = {k: sum(v) / len(v) for k, v in month_days.items()}
-        variation[medicine] = {d: v / month_mean[(d.year, d.month)] for d, v in days.items()}
+    for row in daily.itertuples():
+        variation.setdefault(row.medicine, {})[date.fromisoformat(row.date)] = row.variation
     return variation
 
 
@@ -207,7 +200,7 @@ def main() -> None:
     if len(sys.argv) != 2:
         raise SystemExit("usage: prepare_demo_sales.py <path to the Kaggle CSV>")
     print("Cleaning the source data...")
-    rows = clean(read_rows(Path(sys.argv[1])))
+    rows = clean(Path(sys.argv[1]))
     print("Building the demo pharmacy's sales...")
     series = build(daily_variation(rows))
     for medicine, values in series.items():

@@ -1,14 +1,17 @@
-"""Forecasting microservice (Flask + scikit-learn).
+"""The forecasting service: a small Flask web server that the Node.js server calls.
 
-Called by the Node.js backend over REST:
+    venv/Scripts/python app.py      (listens on http://127.0.0.1:5001)
 
-  GET  /health
-  POST /train    {"medications": [{"medication_id", "sales": [{"date", "quantity_sold"}]}]}
-  POST /predict  {"as_of_date", "horizon_days",
-                  "medications": [{"medication_id", "current_quantity", "threshold"}]}
+It has three addresses:
+  GET  /health   - "is it running?" and how many trained models are saved
+  POST /train    - trains one model per medication from its sales history
+                   {"medications": [{"medication_id", "sales": [{"date", "quantity_sold"}]}]}
+  POST /predict  - for each medication: when will the stock fall below its threshold?
+                   {"as_of_date", "horizon_days",
+                    "medications": [{"medication_id", "current_quantity", "threshold"}]}
 
-Trained models are persisted with joblib under ./models so /predict can run
-without re-sending the sales history.
+Trained models are saved as files in ./models (with joblib), so /predict can use them later
+without receiving the whole sales history again. The forecasting itself is in forecaster.py.
 """
 from __future__ import annotations
 
@@ -21,6 +24,7 @@ from flask import Flask, jsonify, request
 
 import forecaster
 
+# The folder where trained models are saved (one file per medication)
 MODEL_DIR = Path(__file__).parent / "models"
 MODEL_DIR.mkdir(exist_ok=True)
 
@@ -28,6 +32,7 @@ app = Flask(__name__)
 
 
 def model_path(medication_id: int) -> Path:
+    """The file a medication's model is saved in, e.g. models/medication_3.joblib."""
     return MODEL_DIR / f"medication_{int(medication_id)}.joblib"
 
 

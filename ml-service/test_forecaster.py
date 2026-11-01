@@ -24,13 +24,12 @@ def winter_peak(day: date) -> float:
 
 class FeatureTests(unittest.TestCase):
     def test_width_without_and_with_the_yearly_wave(self):
-        idx = np.arange(3)
-        self.assertEqual(forecaster.features(idx, START).shape, (3, 8))
-        self.assertEqual(forecaster.features(idx, START, seasonal=True).shape, (3, 8 + 2 * forecaster.YEARLY_HARMONICS))
+        self.assertEqual(forecaster.build_features(START, range(3), seasonal=False).shape, (3, 8))
+        self.assertEqual(forecaster.build_features(START, range(3), seasonal=True).shape, (3, 8 + 2 * forecaster.YEARLY_HARMONICS))
 
     def test_same_date_same_wave_whatever_the_start(self):
-        a = forecaster.features(np.array([10]), START, seasonal=True)[0, 8:]
-        b = forecaster.features(np.array([0]), START + timedelta(days=10), seasonal=True)[0, 8:]
+        a = forecaster.build_features(START, [10], seasonal=True).iloc[0, 8:].to_numpy()
+        b = forecaster.build_features(START + timedelta(days=10), [0], seasonal=True).iloc[0, 8:].to_numpy()
         np.testing.assert_allclose(a, b)
 
 

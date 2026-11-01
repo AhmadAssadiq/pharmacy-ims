@@ -1,3 +1,4 @@
+// Calls to the server for accounts: register, log in, password reset, phone number, delete account.
 import { request } from './client';
 
 export const registerRequest = (payload) => request('/auth/register', { method: 'POST', body: payload });

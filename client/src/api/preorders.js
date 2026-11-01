@@ -1,3 +1,4 @@
+// Calls to the server for preorders: patients request and cancel, staff move requests on.
 import { request } from './client';
 
 export const createPreorder = (payload) => request('/preorders', { method: 'POST', body: payload });

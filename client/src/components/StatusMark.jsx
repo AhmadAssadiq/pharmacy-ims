@@ -1,3 +1,5 @@
+// The status badges (FR 4): each one has an icon AND a word, so it still makes sense for
+// colour-blind users or on a black-and-white printout. Colour is only a third hint.
 /**
  * Status marks for stock and expiry (FR 4).
  *
@@ -42,7 +44,6 @@ function Glyph({ name }) {
   );
 }
 
-/** One badge: glyph + label, in the tone for its severity (or an explicit `tone`). */
 export default function StatusMark({ kind, label, tone: toneOverride }) {
   const tone =
     toneOverride ?? (kind === 'out' || kind === 'expired' ? 'danger' : kind === 'ok' ? 'success' : 'warning');

@@ -1,3 +1,5 @@
+// Creating a patient account (FR 1). Staff accounts are not made here. Every patient must
+// give a phone number (GP2 addition), so the pharmacy can call about a preorder.
 import { useEffect, useRef, useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';

@@ -1,3 +1,4 @@
+// The two roles, and the home page each one goes to after logging in.
 import constants from '../../../shared/constants.json';
 
 export const { ROLES } = constants;

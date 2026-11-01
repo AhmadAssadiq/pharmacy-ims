@@ -1,11 +1,7 @@
+// The button that switches between English and Arabic. It is written in the language it
+// switches to ("العربية" / "English"), as language buttons usually are.
 import { useI18n } from '../i18n/useI18n';
 
-/**
- * Switches between English and Arabic. The button names the language it
- * switches to, in that language ("العربية" / "English"), and carries its `lang`
- * so a screen reader pronounces it correctly, the usual convention for a
- * language switch.
- */
 export default function LanguageToggle() {
   const { t, setLang } = useI18n();
   const target = t('language.switchToCode');

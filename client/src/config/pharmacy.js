@@ -1,12 +1,10 @@
-/**
- * Everything specific to the pharmacy itself, in one place (GP2 addition).
- * The About and Contact pages read only from here.
- *
- * EVERY VALUE BELOW IS A PLACEHOLDER. Nothing about a real business has been
- * filled in. Replace each one with the pharmacy's actual details before the
- * site is shown to anyone. Text that differs by language has an `en` and an
- * `ar` value; numbers, the email and the map query are shared.
- */
+// Everything about the pharmacy itself in one place (GP2 addition). The About and Contact
+// pages read only from here.
+//
+// EVERY VALUE BELOW IS A PLACEHOLDER. Nothing about a real business has been filled in.
+// Replace each one with the pharmacy's real details before the site is shown to anyone.
+// Text that differs by language has an `en` and an `ar` value; numbers, the email and the
+// map search are the same in both.
 export const PHARMACY = {
   // The pharmacy's trading name.
   name: { en: '[Pharmacy name]', ar: '[اسم الصيدلية]' },

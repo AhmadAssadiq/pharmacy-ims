@@ -1,3 +1,6 @@
+// The frame around every signed-in page: the top bar with the navigation links for the
+// user's role (staff or patient), the clock, language and theme buttons, the user's name and
+// Log out. The page itself appears where <Outlet /> is.
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useI18n } from '../i18n/useI18n';
@@ -32,7 +35,6 @@ function Mark() {
   );
 }
 
-/** Page frame with the role-specific navigation bar. */
 export default function Layout() {
   const { user, logout } = useAuth();
   const { t } = useI18n();

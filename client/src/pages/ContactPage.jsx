@@ -1,3 +1,5 @@
+// The Contact page (GP2 addition): the pharmacy's details, plus a link to the chat for
+// signed-in patients. Anyone can open it.
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useI18n } from '../i18n/useI18n';
@@ -5,14 +7,6 @@ import { ROLES } from '../utils/routes';
 import { PHARMACY, localized } from '../config/pharmacy';
 import PharmacyDetails, { OpeningHours } from '../components/PharmacyDetails';
 
-/**
- * Contact the pharmacy (GP2 addition), signed in or out (see UserFrame).
- *
- * A signed-in patient's first choice is the chat they already have, so there
- * is no second inbox. Everyone else sees the details only. There is
- * deliberately no anonymous contact form: it would need its own table, a
- * staff view, rate limiting and spam handling.
- */
 export default function ContactPage() {
   const { user } = useAuth();
   const { t, lang } = useI18n();

@@ -1,3 +1,4 @@
+// The top-bar button that switches the colour theme: system -> light -> dark.
 import { THEMES, useTheme } from '../context/ThemeContext';
 import { useI18n } from '../i18n/useI18n';
 
@@ -30,11 +31,6 @@ const ICONS = {
   ),
 };
 
-/**
- * Top-bar theme switch: one button that steps system -> light -> dark. Its
- * accessible name states the mode in force, including what "system" resolves
- * to, and the icon shows the same thing.
- */
 export default function ThemeToggle() {
   const { theme, resolvedTheme, setTheme } = useTheme();
   const { t } = useI18n();
