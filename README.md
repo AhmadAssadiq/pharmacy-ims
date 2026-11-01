@@ -6,8 +6,9 @@ for Technology. Prepared by **Abdallah Hasan** and **Ahmad Sadiq**, supervised b
 
 A web application that combines pharmacy inventory management, real-time patient/staff
 chat, and machine-learning reorder alerts, built exactly to the GP1 software documentation.
-GP2 adds dispensing, forecast charts, preorders, image messages, online status, password
-reset, account deletion, dark mode and a full Arabic (right-to-left) interface.
+GP2 adds dispensing, forecast charts, seasonal demand forecasting on Kaggle-based sales data,
+preorders, image messages, online status, password reset, account deletion, dark mode and a full
+Arabic (right-to-left) interface.
 
 ## Repository layout
 
@@ -120,15 +121,19 @@ dated stock lots, and daily sales history from 1 January 2022 up to yesterday (s
 data" below). Stock levels and reorder thresholds are sized from each medication's recent demand,
 so the same demo situations appear whenever you seed.
 
-The seasonal forecasting change (GP2) replaced the demo catalog: Omeprazole and Salbutamol made
-way for Cough Syrup, Vitamin C and Multivitamin, the medicines the sales data covers. `db:seed`
-only adds medications to an empty catalog, so **a database seeded before that change needs one
-`npm run db:reset`** to get the new catalog and stock (this deletes everything in it).
+Two kinds of change reach an existing database differently:
+
+- **Schema changes** (new tables or columns) upgrade in place with `npm run db:migrate`, no reset
+  needed - see below.
+- **Demo data changes** need one `npm run db:reset`, which deletes everything in the database and
+  seeds it again. `db:seed` only adds medications to an empty catalog, so it cannot replace an
+  old one. The seasonal forecasting change is one of these: it replaced the demo catalog
+  (Omeprazole and Salbutamol made way for Cough Syrup, Vitamin C and Multivitamin, the medicines
+  the sales data covers) and its stock. See "Updating an existing checkout" below.
 
 `schema.sql` only issues `CREATE TABLE IF NOT EXISTS`, so on its own it cannot change a table that
 already exists. `db:migrate` therefore also runs `server/src/db/upgrades.js`, whose steps check
-whether they are needed and are safe to re-run. **An existing database upgrades in place with
-`npm run db:migrate`; no reset is needed for the GP2 changes.** The steps so far:
+whether they are needed and are safe to re-run. The steps so far:
 
 - one chat session per patient: merges duplicate sessions (moving their messages), then adds a
   unique key on `chat_sessions.patient_id`;
@@ -151,6 +156,20 @@ npm run db:reset      # drops the database, then migrates and seeds it again
 
 Patients can also self-register from the login page. Staff accounts are created by the
 administrator (see `server/src/db/seed.js`).
+
+### Updating an existing checkout
+
+After pulling new commits:
+
+1. `npm install` at the root, and `venv\Scripts\pip install -r requirements.txt` in `ml-service`,
+   in case dependencies changed.
+2. `npm run db:migrate` for any schema changes (safe to run every time).
+3. If the commit changed the demo data - the seasonal forecasting commit did - run
+   `npm run db:reset` once. It deletes everything in the database (accounts, stock, sales, chats,
+   preorders, alerts) and seeds it again.
+4. Restart the **ML service**: it loads `forecaster.py` once at start-up, so a running one keeps
+   the old model code. The API server restarts itself on file changes (`node --watch`), the
+   client reloads itself.
 
 ## Running
 
@@ -193,7 +212,7 @@ and a Contact link.
 | `npm test` | Runs the unit tests (110): validation, lockout, roles, stock flags, FEFO, preorders, reset tokens, rate limiter, SMTP, presence, image sniffing, account deletion, demo sales, the i18n dictionaries and the translator |
 | `venv\Scripts\python -m unittest` (in `ml-service`) | Runs the forecaster's unit tests (8) |
 | `venv\Scripts\python evaluate.py` (in `ml-service`) | Backtests the forecast before and after the seasonal wave - see "Demo sales data" |
-| `npm run db:reset` | Drops, migrates and re-seeds the database (needed after a schema change) |
+| `npm run db:reset` | Drops, migrates and re-seeds the database: a clean slate, needed when the demo data changes (not for schema changes - `db:migrate` handles those) |
 | `npm run forecast -w server` | Runs the ML forecast / reorder-alert check once and prints the result |
 | `npm run build -w client` | Production build of the React app into `client/dist` |
 
@@ -208,6 +227,7 @@ and a Contact link.
 | UC-1 - update stock quantity | receiving or correcting a stock lot: `batchService.js`, `client/src/components/inventory/BatchPanel.jsx` |
 | Dispensing (GP2 addition) - record a sale, deplete stock FEFO, feed the forecast | `server/src/services/salesService.js`, `server/src/utils/fefo.js`, `client/src/pages/staff/StaffSellPage.jsx` |
 | Forecast charts (GP2 addition) - per-medication demand history and prediction | `forecastService.getMedicationForecast`, `client/src/pages/staff/StaffForecastPage.jsx`, `client/src/components/forecast/` |
+| Seasonal forecasting (GP2 addition) - months and seasons in the model, Kaggle-based demo sales | `ml-service/forecaster.py` (yearly wave), `ml-service/evaluate.py`, `data/` (dataset + preparation script), `server/src/db/demoCatalog.js`, `demoSales.js`, `services/demoSalesService.js`, `client/src/components/forecast/MonthlyChart.jsx` |
 | FR 5 / 5.1 / 5.2 - real-time chat, persisted, unified inbox | `server/src/ws/chatHub.js`, `chatService.js`; `PatientChatPage.jsx`, `StaffChatInboxPage.jsx` |
 | FR 6 / 6.1 / 6.2 - ML forecast + 7-day reorder alerts | `ml-service/forecaster.py`, `server/src/services/forecastService.js`, `server/src/jobs/forecastJob.js`, `ReorderAlertPanel.jsx` |
 | FR 7 - availability without exact quantities | `server/src/services/availabilityService.js`, `PatientAvailabilityPage.jsx` |
@@ -272,7 +292,15 @@ years with the predicted demand for the next three months.
 The demo pharmacy's sales come from the Kaggle
 [Global Pharmacy Sales Dataset (2020-2025)](https://www.kaggle.com/datasets/annemark/global-pharmacy-sales-dataset-20202025),
 a synthetic daily dataset of units sold per medicine, region, country and age group.
-`data/prepare_demo_sales.py` turns it into `data/demo-sales.json`; it prints each step:
+
+**What the app uses:** only `data/demo-sales.json` (committed): daily units sold for each of the
+ten demo medicines, by calendar date. The seed reads it into `sales_history`, and the forecast
+trains on `sales_history`. The app never runs the Python script below and never reads the Kaggle
+CSV; those are only needed to rebuild the JSON, for example to change a medicine's pattern.
+
+`data/prepare_demo_sales.py` is how the JSON was made, kept so the preparation can be checked and
+reproduced (it uses a fixed random seed, so the same CSV gives the same JSON). It prints each
+step:
 
 1. Drop exact duplicate rows (2,630).
 2. Drop 2020-2021. The dataset flags them as COVID years and their demand runs about 60% above
@@ -332,7 +360,7 @@ require `Authorization: Bearer <jwt>` for a user that still exists. Errors are
 | PATCH/DELETE | `/medications/batches/:batchId` | staff | correct or remove a stock lot (UC-1) |
 | GET/POST | `/sales` | staff | recent sales / record a multi-item sale `{ items: [{ medication_id, quantity }] }`, depleting stock FEFO in one transaction |
 | GET | `/sales/preview` | staff | which lots one basket line would draw from, before committing |
-| GET | `/forecast/:medicationId` | staff | sales history + 7-day forecast for one medication (retrains on request; powers the forecast charts) |
+| GET | `/forecast/:medicationId` | staff | sales history + 7-day forecast for one medication (retrains on request; powers the forecast charts). Also returns `seasonal` (whether the yearly wave was used) and, for seasonal models, an `outlook` of daily predicted demand to the end of the third month ahead, for the monthly chart |
 | GET | `/alerts` | staff | active reorder alerts |
 | PATCH | `/alerts/:id/dismiss` | staff | dismiss an alert |
 | POST | `/chat/sessions` | patient | open (or create) the patient's chat session |
