@@ -15,33 +15,65 @@ Arabic (right-to-left) interface.
 ```
 /pharmacy-ims
   /client       -> React app (staff + patient portals)      - Vite, React Router
-  /server       -> Node.js REST API + WebSocket chat server  - Express, mysql2, ws, node-cron
-  /ml-service   -> Python forecasting microservice           - Flask, scikit-learn
+  /server       -> Node.js REST API + live chat server      - Express, mysql2, Socket.IO, node-cron
+  /ml-service   -> Python forecasting microservice           - Flask, scikit-learn, pandas
   /shared       -> constants shared by client and server (thresholds, roles, statuses)
   /data         -> the demo pharmacy's sales history (demo-sales.json) and the script that builds it
 ```
 
-The server follows a routes -> controllers -> services -> models layering (NFR 5.1):
+The code is written to be read by students: plain functions with clear names, a comment at the
+top of every file and on every step, and well-known libraries instead of hand-written plumbing.
+
+### Server (`server/src`): three layers (NFR 5.1)
+
+A request goes **route -> service -> database**: the route checks the input and calls a service,
+the service does the work (logic and SQL together), and the route sends back the JSON.
 
 ```
 server/src
-  config/        environment + MySQL pool
-  db/            schema.sql, migrate.js (+ upgrades.js: in-place upgrades), seed.js,
-                 demoCatalog.js + demoSales.js (the demo catalog and its sales history)
-  models/        one data-access module per table (parameterized queries only)
-  services/      business logic (auth, medications, chat, forecast, availability)
-  controllers/   HTTP handlers
-  routes/        Express routers + auth / role middleware wiring
-  middleware/    authenticate, requireRole, errorHandler
-  validation/    pure input validation (unit tested)
-  ws/            WebSocket chat hub + presence.js (who is online)
-  jobs/          scheduled forecast job
-  utils/         stock flags, FEFO, HttpError, reset tokens, image sniffing, upload store
+  index.js        starts the HTTP server, the Socket.IO chat and the forecast job
+  app.js          the Express app: middleware, every /api route, the error handler
+  config.js       settings from server/.env        db.js   the MySQL pool + runInTransaction()
+  constants.js    the shared constants (from shared/constants.json)
+  routes/         one file per feature: auth, medications, sales, preorders, chat, forecast,
+                  availability - URL -> check input -> call the service -> send JSON
+  services/       one file per feature: the logic and its SQL (authService, medicationService,
+                  salesService, preorderService, chatService, forecastService,
+                  passwordResetService, emailService, demoSalesService, loginLockout)
+  validation/     zod schemas for every form, with the English error messages
+  middleware/     auth.js (login token check, role check), errorHandler.js
+  socket/         chatSocket.js - live chat and online status with Socket.IO
+  jobs/           forecastJob.js (hourly, at start-up, and 10 s after a sale), runForecastOnce.js
+  utils/          fefo.js (sell the soonest-expiring lot first), stockFlags.js, dates.js, parseId.js
+  db/             schema.sql, migrate.js, reset.js, seed.js, demoCatalog.js, demoSales.js
 ```
 
-The client keeps the same split, plus `client/src/i18n/` (English and Arabic dictionaries and
-the translator), `client/src/context/ThemeContext.jsx` (light / dark / system) and
-`client/src/config/pharmacy.js` (the pharmacy's own details, see below).
+Libraries: Express 5, mysql2 (plain SQL), zod (validation), http-errors, jsonwebtoken + bcryptjs
+(login), Socket.IO (chat), multer + file-type (image uploads), nodemailer (email),
+express-rate-limit, node-cron.
+
+### Client (`client/src`)
+
+```
+client/src
+  App.jsx         which address shows which page
+  pages/          one file per page (staff/, patient/, and the signed-out pages)
+  components/     shared pieces: layout, dialogs, status badges, the chat window, charts,
+                  the inventory table and stock lots
+  api/            one file per feature; client.js is the axios setup (token, errors)
+  hooks/          useChatSocket.js - the live chat connection (socket.io-client)
+  context/        AuthContext (who is signed in), ThemeContext (light / dark / system)
+  i18n/           en.json, ar.json, setup.js (i18next) and useI18n.js (texts, dates, prices)
+  config/         pharmacy.js - the pharmacy's own details (see below)
+  styles.css      every style, in labelled sections
+```
+
+Libraries: React 18, React Router, axios, i18next + react-i18next, socket.io-client, Recharts.
+
+### ML service (`ml-service`)
+
+`app.py` (the Flask web server), `forecaster.py` (the model, using pandas and scikit-learn),
+`evaluate.py` (the before/after backtest) and `test_forecaster.py` (unit tests).
 
 ## Prerequisites
 
@@ -123,27 +155,18 @@ so the same demo situations appear whenever you seed.
 
 Two kinds of change reach an existing database differently:
 
-- **Schema changes** (new tables or columns) upgrade in place with `npm run db:migrate`, no reset
-  needed - see below.
-- **Demo data changes** need one `npm run db:reset`, which deletes everything in the database and
+- **New tables** are added by `npm run db:migrate`. **Changed tables** (a new column) need one
+  `npm run db:reset` - see below.
+- **Demo data changes** also need one `npm run db:reset`, which deletes everything in the database and
   seeds it again. `db:seed` only adds medications to an empty catalog, so it cannot replace an
   old one. The seasonal forecasting change is one of these: it replaced the demo catalog
   (Omeprazole and Salbutamol made way for Cough Syrup, Vitamin C and Multivitamin, the medicines
   the sales data covers) and its stock. See "Updating an existing checkout" below.
 
-`schema.sql` only issues `CREATE TABLE IF NOT EXISTS`, so on its own it cannot change a table that
-already exists. `db:migrate` therefore also runs `server/src/db/upgrades.js`, whose steps check
-whether they are needed and are safe to re-run. The steps so far:
-
-- one chat session per patient: merges duplicate sessions (moving their messages), then adds a
-  unique key on `chat_sessions.patient_id`;
-- image attachments: adds `attachment_path`, `attachment_mime`, `attachment_size`,
-  `attachment_name` (and a unique key on the path) to `chat_messages`;
-- phone numbers: adds `users.phone`. `npm run db:seed` gives the existing demo patient its
-  (fictional) number; other existing patients are asked to add one when they sign in.
-
-New tables need nothing special: `CREATE TABLE IF NOT EXISTS` adds them. To start from a clean
-slate (seed data goes stale after a few weeks):
+`schema.sql` only issues `CREATE TABLE IF NOT EXISTS`: running `db:migrate` again adds new
+tables but never changes a table that already exists. **The simplified code added a column
+(`users.password_changed_at`), so a database made before it needs one `npm run db:reset`.**
+To start from a clean slate at any time (seed data goes stale after a few weeks):
 
 ```bash
 npm run db:reset      # drops the database, then migrates and seeds it again
@@ -163,9 +186,9 @@ After pulling new commits:
 
 1. `npm install` at the root, and `venv\Scripts\pip install -r requirements.txt` in `ml-service`,
    in case dependencies changed.
-2. `npm run db:migrate` for any schema changes (safe to run every time).
-3. If the commit changed the demo data - the seasonal forecasting commit did - run
-   `npm run db:reset` once. It deletes everything in the database (accounts, stock, sales, chats,
+2. `npm run db:migrate` (safe to run every time; adds any new tables).
+3. If the commit changed the demo data or an existing table - the seasonal forecasting commit and
+   the simplified code both did - run `npm run db:reset` once. It deletes everything in the database (accounts, stock, sales, chats,
    preorders, alerts) and seeds it again.
 4. Restart the **ML service**: it loads `forecaster.py` once at start-up, so a running one keeps
    the old model code. The API server restarts itself on file changes (`node --watch`), the
@@ -182,7 +205,7 @@ cd ml-service
 venv\Scripts\python app.py
 ```
 
-**API + WebSocket server** (port 4000) and **React client** (port 5173), from the repo root:
+**API + chat server** (port 4000) and **React client** (port 5173), from the repo root:
 
 ```bash
 npm run dev
@@ -209,10 +232,10 @@ and a Contact link.
 
 | Command | What it does |
 |---|---|
-| `npm test` | Runs the unit tests (110): validation, lockout, roles, stock flags, FEFO, preorders, reset tokens, rate limiter, SMTP, presence, image sniffing, account deletion, demo sales, the i18n dictionaries and the translator |
+| `npm test` | Runs the server unit tests (61): form validation, login lockout, login tokens (including sign-out after a password reset), roles, stock flags, FEFO, preorders, image checks, reset emails, account deletion, demo sales, the forecast after a sale, and the English/Arabic dictionaries |
 | `venv\Scripts\python -m unittest` (in `ml-service`) | Runs the forecaster's unit tests (8) |
 | `venv\Scripts\python evaluate.py` (in `ml-service`) | Backtests the forecast before and after the seasonal wave - see "Demo sales data" |
-| `npm run db:reset` | Drops, migrates and re-seeds the database: a clean slate, needed when the demo data changes (not for schema changes - `db:migrate` handles those) |
+| `npm run db:reset` | Drops, migrates and re-seeds the database: a clean slate, needed when the demo data or an existing table changes |
 | `npm run forecast -w server` | Runs the ML forecast / reorder-alert check once and prints the result |
 | `npm run build -w client` | Production build of the React app into `client/dist` |
 
@@ -220,30 +243,30 @@ and a Contact link.
 
 | Requirement | Where it is implemented |
 |---|---|
-| FR 1 - authenticate before any access | `server/src/middleware/authenticate.js`, `client/src/components/ProtectedRoute.jsx` |
-| FR 2 / 2.1 / 2.2 - role-based access | `server/src/middleware/requireRole.js`, role-specific routes and navigation in `client/src/App.jsx` |
-| FR 3 / 3.1 / 3.2 - manage medication catalog | `server/src/routes/medicationRoutes.js` -> `medicationService.js`; `client/src/pages/staff/StaffInventoryPage.jsx` |
+| FR 1 - authenticate before any access | `requireLogin` in `server/src/middleware/auth.js`, `client/src/components/ProtectedRoute.jsx` |
+| FR 2 / 2.1 / 2.2 - role-based access | `requireRole` in `server/src/middleware/auth.js`, role-specific routes and navigation in `client/src/App.jsx` |
+| FR 3 / 3.1 / 3.2 - manage medication catalog | `server/src/routes/medications.js` -> `services/medicationService.js`; `client/src/pages/staff/StaffInventoryPage.jsx` |
 | FR 4 - stock levels with low-stock / near-expiry flags | `server/src/utils/stockFlags.js` (per-medication threshold, 30 days) |
-| UC-1 - update stock quantity | receiving or correcting a stock lot: `batchService.js`, `client/src/components/inventory/BatchPanel.jsx` |
+| UC-1 - update stock quantity | receiving or correcting a stock lot: `medicationService.addBatch` / `updateBatch`, `client/src/components/inventory/BatchPanel.jsx` |
 | Dispensing (GP2 addition) - record a sale, deplete stock FEFO, feed the forecast | `server/src/services/salesService.js`, `server/src/utils/fefo.js`, `client/src/pages/staff/StaffSellPage.jsx` |
 | Forecast charts (GP2 addition) - per-medication demand history and prediction | `forecastService.getMedicationForecast`, `client/src/pages/staff/StaffForecastPage.jsx`, `client/src/components/forecast/` |
 | Seasonal forecasting (GP2 addition) - months and seasons in the model, Kaggle-based demo sales | `ml-service/forecaster.py` (yearly wave), `ml-service/evaluate.py`, `data/` (dataset + preparation script), `server/src/db/demoCatalog.js`, `demoSales.js`, `services/demoSalesService.js`, `client/src/components/forecast/MonthlyChart.jsx` |
-| FR 5 / 5.1 / 5.2 - real-time chat, persisted, unified inbox | `server/src/ws/chatHub.js`, `chatService.js`; `PatientChatPage.jsx`, `StaffChatInboxPage.jsx` |
+| FR 5 / 5.1 / 5.2 - real-time chat, persisted, unified inbox | `server/src/socket/chatSocket.js`, `services/chatService.js`; `PatientChatPage.jsx`, `StaffChatInboxPage.jsx` |
 | FR 6 / 6.1 / 6.2 - ML forecast + 7-day reorder alerts | `ml-service/forecaster.py`, `server/src/services/forecastService.js`, `server/src/jobs/forecastJob.js`, `ReorderAlertPanel.jsx` |
-| FR 7 - availability without exact quantities | `server/src/services/availabilityService.js`, `PatientAvailabilityPage.jsx` |
-| NFR 2.1 - secure storage | bcrypt password hashes, parameterized SQL everywhere, JWT-protected API and WebSocket |
-| NFR 2.3 - lock after 5 failed logins | `server/src/services/loginAttemptService.js` (15-minute lock) |
+| FR 7 - availability without exact quantities | `medicationService.getAvailability`, `PatientAvailabilityPage.jsx` |
+| NFR 2.1 - secure storage | bcrypt password hashes, parameterized SQL everywhere, JWT-protected API and chat connection |
+| NFR 2.3 - lock after 5 failed logins | `server/src/services/loginLockout.js` (15-minute lock) |
 | NFR 3.2 - desktop and mobile | responsive CSS in `client/src/styles.css` |
 | NFR 5.1 - modular code | layering described above |
 | Live clock (GP2 addition) | `client/src/components/Clock.jsx` |
 | Dark mode (GP2 addition) | `client/src/context/ThemeContext.jsx`, `ThemeToggle.jsx`, dark token set in `styles.css`, pre-paint script in `client/index.html` |
-| Arabic / RTL (GP2 addition) | `client/src/i18n/`, `LanguageToggle.jsx`, logical CSS properties, error `code`s from `server/src/utils/httpError.js` |
+| Arabic / RTL (GP2 addition) | `client/src/i18n/`, `LanguageToggle.jsx`, logical CSS properties, error `code`s sent by `server/src/middleware/errorHandler.js` |
 | Preorders (GP2 addition) | `server/src/services/preorderService.js` (ready = record the delivered lot into stock; collect = FEFO dispense; each in one transaction), `PatientAvailabilityPage.jsx`, `StaffPreordersPage.jsx` |
-| Patient phone numbers (GP2 addition) | `normalisePhone` in `server/src/validation/authValidation.js`, `RegisterPage.jsx`, `PatientAccountPage.jsx`, `PhoneLink.jsx` (staff inbox and preorder queue) |
-| Forgot password (GP2 addition) | `server/src/services/passwordResetService.js`, `utils/resetToken.js`, `services/mailService.js`, `utils/smtp.js`, `ForgotPasswordPage.jsx`, `ResetPasswordPage.jsx` |
-| Online status (GP2 addition) | `server/src/ws/presence.js`, `chatHub.js`; `ChatWindow.jsx` (`PresenceMark`) |
-| Image messages (GP2 addition) | `server/src/utils/imageSniff.js`, `uploadStore.js`, `chatService.sendImage`; `ChatWindow.jsx`, `ChatImage.jsx` |
-| Delete account (GP2 addition) | `authService.deleteOwnAccount`, `middleware/authenticate.js` (user must still exist), `PatientAccountPage.jsx` |
+| Patient phone numbers (GP2 addition) | `normalisePhone` in `server/src/validation/authSchemas.js`, `RegisterPage.jsx`, `PatientAccountPage.jsx`, `PhoneLink.jsx` (staff inbox and preorder queue) |
+| Forgot password (GP2 addition) | `server/src/services/passwordResetService.js`, `services/emailService.js` (nodemailer), `ForgotPasswordPage.jsx`, `ResetPasswordPage.jsx` |
+| Online status (GP2 addition) | `server/src/socket/chatSocket.js` (Socket.IO rooms); `ChatWindow.jsx` (`PresenceMark`) |
+| Image messages (GP2 addition) | `chatService.sendImageMessage` (file-type checks the bytes), `routes/chat.js` (multer); `ChatWindow.jsx`, `ChatImage.jsx` |
+| Delete account (GP2 addition) | `authService.deleteOwnAccount`, `middleware/auth.js` (user must still exist), `PatientAccountPage.jsx` |
 | 404, About, Contact (GP2 addition) | `NotFoundPage.jsx`, `PatientAboutPage.jsx`, `ContactPage.jsx`, `client/src/config/pharmacy.js` |
 
 Thresholds live in `shared/constants.json`:
@@ -265,7 +288,9 @@ Thresholds live in `shared/constants.json`:
 
 0. Every sale recorded at the dispensing counter writes a row into `sales_history`, so the model
    trains on real demand as the pharmacy is used, not only on the seeded history.
-1. The backend job (hourly by default, `FORECAST_CRON`, and once 5 s after start-up) sends each
+1. The backend job (`server/src/jobs/forecastJob.js`) runs hourly (`FORECAST_CRON`), 5 s after
+   start-up, and 10 s after a sale or a collected preorder (several sales close together cause one
+   run), so reorder alerts react to real sales within seconds. It sends each
    medication's `sales_history` rows to the ML service `POST /train`.
 2. The service aggregates sales per day and fits a scikit-learn `LinearRegression` per
    medication on a time index plus day-of-week indicators. Once a medication has a year of
@@ -323,7 +348,8 @@ touched. Set `DEMO_SALES_TOPUP=false` for a real pharmacy.
 
 The raw CSV is not committed: its licence is listed as "Unknown". To rebuild the JSON, download it
 into `data/raw/` and run
-`py -3.12 -I data/prepare_demo_sales.py data/raw/global_pharmacy_sales_2020_2025_daily_dataset.csv`.
+`ml-service/venv/Scripts/python -I data/prepare_demo_sales.py data/raw/global_pharmacy_sales_2020_2025_daily_dataset.csv`
+(pandas is installed with the ML service).
 
 `ml-service/evaluate.py` replays 2025 week by week. At each week it trains on the sales before it,
 first the previous way (trend and weekday on the last 90 days), then with the seasonal wave on
@@ -366,7 +392,7 @@ require `Authorization: Bearer <jwt>` for a user that still exists. Errors are
 | POST | `/chat/sessions` | patient | open (or create) the patient's chat session |
 | GET | `/chat/sessions` | staff | unified inbox |
 | GET | `/chat/sessions/:id/messages` | participant | message history |
-| POST | `/chat/sessions/:id/messages` | participant | send (HTTP fallback; also pushed over WebSocket) |
+| POST | `/chat/sessions/:id/messages` | participant | send (HTTP fallback; also pushed live over Socket.IO) |
 | POST | `/chat/sessions/:id/attachments` | participant | multipart: `image` (PNG/JPEG/WebP/GIF, max 5 MB) + optional `caption` |
 | GET | `/chat/attachments/:key` | participant | the image, after re-checking access |
 | POST | `/preorders` | patient | request an out-of-stock medication `{ medication_id, quantity, note? }`; needs a phone number on the account |
@@ -375,7 +401,7 @@ require `Authorization: Bearer <jwt>` for a user that still exists. Errors are
 | GET | `/preorders` | staff | all requests, newest first, `?status=` optional |
 | PATCH | `/preorders/:id` | staff | `{ status, delivery? }`: pending -> ready / cancelled, ready -> collected / cancelled. With "ready", `delivery: { quantity, expiry_date, batch_number? }` adds that lot to stock (at least the requested quantity, expiring after today) |
 | GET | `/availability` | any | in-stock / out-of-stock list |
-| WS | `/ws?token=<jwt>` | any | real-time chat channel, plus `presence` frames |
+| Socket.IO | `/socket.io` (login token in `auth.token`) | any | live chat: events `ready`, `message`, `presence`; send with `message` `{ sessionId, content }` and an acknowledgement callback |
 
 ## Notes on the GP2 features
 
@@ -395,8 +421,10 @@ minutes, and a newer link retires older ones. Both endpoints are rate limited in
 (and per email for forgot-password); behind a reverse proxy, set Express's `trust proxy` so the
 limiter sees client addresses.
 
-The link is emailed, in the language the patient was using, by a small SMTP client built on
-Node's own `tls` module (`server/src/utils/smtp.js`; no mail package). **Email is only sent once
+The link is emailed, in the language the patient was using, with nodemailer
+(`server/src/services/emailService.js`). Resetting the password also records the time
+(`users.password_changed_at`), and every login token issued before it is refused from then on -
+so a reset signs out every other session, including a stolen token. **Email is only sent once
 SMTP is set up in `server/.env`**; until then the server logs "SMTP is not configured" once and
 nobody receives a link. With Gmail:
 
@@ -422,13 +450,13 @@ so Inventory shows it straight away. If the stock was received through Add stock
 choose "already in stock" so it is not counted twice. Nothing is reserved: until the patient
 collects, Dispense can sell those units like any others, and collecting then answers 409.
 
-**Online status.** Presence is in memory only (`server/src/ws/presence.js`): nothing is written
-to the database on connect or disconnect, it resets when the server restarts, and there is
-therefore no "last seen". Staff see which patients are online; a patient only learns whether
-anyone at the pharmacy is online. A closed laptop goes offline within about a minute through the
-WebSocket heartbeat.
+**Online status.** Presence comes from Socket.IO's rooms (`server/src/socket/chatSocket.js`):
+nothing is written to the database, it resets when the server restarts, and there is therefore no
+"last seen". Staff see which patients are online; a patient only learns whether anyone at the
+pharmacy is online. A closed laptop goes offline within about a minute through Socket.IO's
+built-in heartbeat.
 
-**Image messages.** Uploads are sniffed by their bytes (SVG is always refused), written to
+**Image messages.** Uploads are checked by their bytes with the file-type library (SVG is always refused), written to
 `UPLOADS_DIR` under a random UUID name, and served only by the authenticated route, which
 re-checks access and sends `nosniff` and a sandboxing CSP. The folder is never served
 statically. Deleting a patient's account also deletes their conversation's image files.

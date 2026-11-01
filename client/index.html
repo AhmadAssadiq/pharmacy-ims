@@ -10,7 +10,7 @@
       // user never sees a flash of light and an Arabic user never sees the page
       // laid out left to right first. "system" stores nothing; the stylesheet's
       // prefers-color-scheme block handles it. See src/context/ThemeContext.jsx
-      // and src/i18n/I18nContext.jsx, which keep these in step afterwards.
+      // and src/i18n/setup.js, which keep these in step afterwards.
       try {
         var root = document.documentElement;
         var theme = localStorage.getItem('pims_theme');

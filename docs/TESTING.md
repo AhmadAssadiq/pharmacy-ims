@@ -1,5 +1,10 @@
 # Testing and Verification Report
 
+> **Note (GP2 simplification):** sections 1-5 record the test runs of the original code. The
+> code was later simplified (branch `simplify`): the server tests were rewritten for the new
+> modules (61 tests, `npm test`), and every API response was checked against the original with a
+> 102-request snapshot. File names in the tables below refer to the original layout.
+
 Environment: Windows 10, Node.js 22.16, MySQL 8.4.9, all three services running locally.
 Sections 2-4 were recorded on 2026-09-15 (Python 3.13, scikit-learn 1.6.1); section 5 covers the
 GP2 additions and was recorded on 2026-10-21.
@@ -40,7 +45,7 @@ Runner: Node's built-in `node:test`. 101 tests in 17 files, all passing (2026-10
 | NFR 3.1 | Inventory usable without training | Every field has a plain-language label, flags are shown as coloured badges with text, quantity update is a visible "Update" button next to the number, validation errors appear inline | **pass** (UC-1 walkthrough below) |
 | NFR 3.2 | Patient UI usable on desktop and mobile | Rendered availability and chat pages at 375x812 (mobile preset) and at desktop width; navigation wraps, lists stack, chat composer stays reachable | **pass** |
 | NFR 4.1 | 50 concurrent users | Script: 100 simultaneous inventory/availability requests (all 200 OK in 170 ms total), 50 simultaneous WebSocket connections each sending a message (all delivered, slowest 116 ms). Connection pool of 20, stateless JWT auth, no per-request global locks | **pass** |
-| NFR 5.1 | Modular code | Server split into config / db / models / services / controllers / routes / middleware / validation / ws / jobs / utils; client split into api / context / hooks / components / pages; ML service split into `app.py` (HTTP) and `forecaster.py` (model) | **pass** |
+| NFR 5.1 | Modular code | Server split into routes / services / validation / middleware / socket / jobs / utils / db (simplified in GP2: models merged into services, controllers into routes); client split into api / context / hooks / i18n / components / pages; ML service split into `app.py` (HTTP) and `forecaster.py` (model) | **pass** |
 
 ## 3. User acceptance testing
 
