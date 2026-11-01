@@ -188,11 +188,51 @@ After pulling new commits:
    in case dependencies changed.
 2. `npm run db:migrate` (safe to run every time; adds any new tables).
 3. If the commit changed the demo data or an existing table - the seasonal forecasting commit and
-   the simplified code both did - run `npm run db:reset` once. It deletes everything in the database (accounts, stock, sales, chats,
-   preorders, alerts) and seeds it again.
+   the simplified code both did - run `npm run db:reset` once. It deletes everything in the
+   database (accounts, stock, sales, chats, preorders, alerts) and seeds it again.
 4. Restart the **ML service**: it loads `forecaster.py` once at start-up, so a running one keeps
    the old model code. The API server restarts itself on file changes (`node --watch`), the
    client reloads itself.
+
+### Coming from the old code layout (GP2 simplification)
+
+In November 2026 the whole codebase was rewritten to be simpler to read, **without changing what
+it does**: every API endpoint keeps the same URL, request, response, status codes and error codes
+(checked by replaying 102 requests against the old and new server), and the pages keep the same
+markup, CSS classes and look (only the charts look slightly different, now drawn by Recharts).
+
+After pulling it, a checkout needs: `npm install` (new packages), `venv\Scripts\pip install -r
+requirements.txt` in `ml-service` (pandas), **one `npm run db:reset`** (the `users` table gained
+`password_changed_at`), and a restart of everything.
+
+Where things moved:
+
+| Old | New |
+|---|---|
+| `server/src/routes/*Routes.js` + `controllers/*Controller.js` | `server/src/routes/<feature>.js` (one file: URL, input check, service call, reply) |
+| `server/src/models/*Model.js` (SQL) | inside `server/src/services/<feature>Service.js` (logic and SQL together) |
+| `server/src/validation/*Validation.js` (hand-written) | `server/src/validation/*Schemas.js` (zod), same English messages |
+| `config/env.js`, `config/db.js` | `config.js`, `db.js` (with `runInTransaction()`) |
+| `middleware/authenticate.js`, `requireRole.js`, `services/tokenService.js` | `middleware/auth.js` |
+| `utils/httpError.js`, `utils/asyncHandler.js` | `http-errors` library; Express 5 catches async errors itself |
+| `ws/chatHub.js`, `ws/presence.js`, client `hooks/useChatSocket.js` (raw WebSocket) | `socket/chatSocket.js` and the new `hooks/useChatSocket.js` (Socket.IO, rooms, built-in reconnect and heartbeat) |
+| `utils/smtp.js`, `services/mailService.js` | `services/emailService.js` (nodemailer) |
+| `services/rateLimitService.js` | `express-rate-limit` in `routes/auth.js` |
+| `services/loginAttemptService.js` | `services/loginLockout.js` |
+| `utils/imageSniff.js`, `utils/uploadStore.js`, `utils/contentDisposition.js` | `file-type` + `content-disposition` libraries, image storage inside `services/chatService.js` |
+| `services/batchService.js`, `availabilityService.js` | inside `services/medicationService.js` |
+| `db/upgrades.js` (in-place upgrades) | removed: one clean `schema.sql`, rebuild with `db:reset` |
+| CommonJS (`require`) on the server | ES modules (`import`), the same style as the client |
+| client `i18n/I18nContext.jsx`, `translate.js`, `context.js` | `i18n/setup.js` (i18next) and `i18n/useI18n.js` (same `t`, `te`, `formatDate`... as before). Plurals in `en.json`/`ar.json` are now keys ending in `_one`, `_other`... A sentence with a styled number uses `<StyledText>` |
+| client `api/client.js` (fetch) | `api/client.js` (axios), same `request()` and `ApiError` |
+| hand-drawn SVG charts | Recharts (`components/forecast/`) |
+| manual loops in `forecaster.py`, `data/prepare_demo_sales.py` | pandas (same results) |
+
+Also new in the same change: reorder alerts are recalculated 10 seconds after a sale or a
+collected preorder (`jobs/forecastJob.js`, `requestForecastSoon`); a password reset signs out every
+older session (`users.password_changed_at` compared with the token's `iat` in `middleware/auth.js`);
+Arabic image file names are now stored correctly; and a chat message refused by the server now
+shows an error instead of failing silently.
 
 ## Running
 
