@@ -2,7 +2,7 @@
   "name": "server",
   "version": "1.0.0",
   "private": true,
-  "description": "Pharmacy IMS - Node.js REST API + WebSocket chat server",
+  "description": "Pharmacy IMS - Node.js REST API + Socket.IO chat server",
   "main": "src/index.js",
   "scripts": {
     "dev": "node --watch --env-file=.env src/index.js",
@@ -15,12 +15,19 @@
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
+    "content-disposition": "^1.0.0",
     "cors": "^2.8.5",
-    "express": "^4.21.2",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.0.1",
+    "file-type": "^21.0.0",
+    "http-errors": "^2.0.0",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.4.0",
     "mysql2": "^3.11.5",
     "node-cron": "^3.0.3",
-    "ws": "^8.18.0"
-  }
+    "nodemailer": "^7.0.5",
+    "socket.io": "^4.8.1",
+    "zod": "^4.0.5"
+  },
+  "type": "module"
 }

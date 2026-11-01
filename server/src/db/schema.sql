@@ -1,22 +1,27 @@
--- Pharmacy Inventory Management System - database schema
--- The six tables from the project specification plus `medication_batches`:
--- stock is held per dated lot so each delivery carries its own expiry date.
+-- Pharmacy Inventory Management System - database schema.
+-- Run by   npm run db:migrate   (see migrate.js).
+-- The six tables from the project specification, plus:
+--   medication_batches  stock is kept per lot, so each delivery has its own expiry date
+--   preorders           patients asking for out-of-stock medications (GP2 addition)
+--   password_resets     "forgot password" links (GP2 addition)
 
 CREATE DATABASE IF NOT EXISTS pharmacy_ims
   CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 USE pharmacy_ims;
 
 -- Staff and patient accounts. Passwords are stored only as bcrypt hashes.
--- phone is required for every patient who registers (GP2 addition) so the
--- pharmacy can call about a preorder; it is NULL only for staff and for
--- patients who registered before it existed, who are asked to add one.
+-- phone: every patient who registers must give one (GP2 addition), so the pharmacy can
+--   call them about a preorder. It is NULL for staff.
+-- password_changed_at: when the password was last reset. Login tokens made before this
+--   time are refused, so a reset signs out every old session (see middleware/auth.js).
 CREATE TABLE IF NOT EXISTS users (
-  id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  name          VARCHAR(100) NOT NULL,
-  email         VARCHAR(255) NOT NULL,
-  phone         VARCHAR(20) NULL,
-  password_hash VARCHAR(255) NOT NULL,
-  role          ENUM('staff', 'patient') NOT NULL,
+  id                  INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  name                VARCHAR(100) NOT NULL,
+  email               VARCHAR(255) NOT NULL,
+  phone               VARCHAR(20) NULL,
+  password_hash       VARCHAR(255) NOT NULL,
+  role                ENUM('staff', 'patient') NOT NULL,
+  password_changed_at DATETIME NULL,
   PRIMARY KEY (id),
   UNIQUE KEY uq_users_email (email)
 ) ENGINE=InnoDB;
@@ -66,7 +71,7 @@ CREATE TABLE IF NOT EXISTS chat_sessions (
 
 -- Persisted chat log (FR 5.1). A message is text, an image, or an image with
 -- a caption. content stays NOT NULL: an image-only message stores '' and the
--- rule "text or an image" is enforced in validation/chatValidation.js. The
+-- rule "text or an image" is enforced in services/chatService.js. The
 -- image itself is a file on disk; attachment_path holds only its generated
 -- name (never the client's filename), and attachment_name a sanitised copy of
 -- the original name for the download header (GP2 addition).

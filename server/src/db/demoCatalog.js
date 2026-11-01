@@ -1,34 +1,31 @@
-/**
- * The demo catalog (used by db/seed.js and services/demoSalesService.js).
- *
- * Ten medications have a `series` in data/demo-sales.json, which supplies their
- * daily sales from 2022 to yesterday (see db/demoSales.js). Their stock is
- * sized from that demand when the seed runs, so the demo shows the same
- * situations whenever it is seeded - including in a busy winter month:
- *   stock.coverDays   - days of recent average demand held in stock
- *   stock.reorderDays - days of recent average demand used as the reorder threshold
- *   batches[].share   - this lot's part of the stock
- *
- * Vitamin D3 has no series: it is newly stocked, with a few days of generated
- * sales (`demand`), to show the "insufficient data" path (UC-3 alternative flow).
- */
+// The demo pharmacy's starting catalogue (used by db/seed.js and services/demoSalesService.js).
+//
+// Ten medications have a `series`: the name of their daily sales in data/demo-sales.json,
+// which the seed copies into sales_history from 2022 up to yesterday (see db/demoSales.js).
+// Their stock is not a fixed number: it is worked out from their recent demand when the
+// seed runs (sizeStock below), so the demo shows the same situations whenever it is seeded:
+//   stock.coverDays   - how many days of average demand are in stock
+//   stock.reorderDays - how many days of average demand the reorder threshold is
+//   batches[].share   - which part of the stock is in this lot (0.45 = 45%)
+//
+// Vitamin D3 has no series: it was "just stocked" and gets only 5 days of made-up sales,
+// to show the "not enough data to forecast" case (UC-3 alternative flow).
+import { addDaysToDate, todayAsText } from '../utils/dates.js';
 
-/** Returns a YYYY-MM-DD date `days` days from today (negative = in the past). */
-function dateFromToday(days) {
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+// The date `days` days from today, as 'YYYY-MM-DD' (negative = in the past).
+function daysFromToday(days) {
+  return addDaysToDate(todayAsText(), days);
 }
 
-const DEMO_MEDICATIONS = [
+export const DEMO_MEDICATIONS = [
   {
     name: 'Paracetamol 500mg', category: 'Analgesic', unit_price: 1.5,
     supplier_info: 'Hikma Pharmaceuticals - +962 6 580 2900',
     series: 'Paracetamol',
     stock: { coverDays: 30, reorderDays: 4 },
     batches: [
-      { share: 0.45, expiry_date: dateFromToday(120), batch_number: 'PARA-2409', received_date: dateFromToday(-80) },
-      { share: 0.55, expiry_date: dateFromToday(400), batch_number: 'PARA-2511', received_date: dateFromToday(-20) },
+      { share: 0.45, expiry_date: daysFromToday(120), batch_number: 'PARA-2409', received_date: daysFromToday(-80) },
+      { share: 0.55, expiry_date: daysFromToday(400), batch_number: 'PARA-2511', received_date: daysFromToday(-20) },
     ],
   },
   {
@@ -37,7 +34,7 @@ const DEMO_MEDICATIONS = [
     series: 'Ibuprofen',
     stock: { coverDays: 35, reorderDays: 3 },
     batches: [
-      { share: 1, expiry_date: dateFromToday(300), batch_number: 'IBU-2503', received_date: dateFromToday(-45) },
+      { share: 1, expiry_date: daysFromToday(300), batch_number: 'IBU-2503', received_date: daysFromToday(-45) },
     ],
   },
   {
@@ -48,8 +45,8 @@ const DEMO_MEDICATIONS = [
     series: 'Amoxicillin',
     stock: { coverDays: 8, reorderDays: 3 },
     batches: [
-      { share: 0.45, expiry_date: dateFromToday(25), batch_number: 'AMX-2408', received_date: dateFromToday(-90) },
-      { share: 0.55, expiry_date: dateFromToday(210), batch_number: 'AMX-2502', received_date: dateFromToday(-15) },
+      { share: 0.45, expiry_date: daysFromToday(25), batch_number: 'AMX-2408', received_date: daysFromToday(-90) },
+      { share: 0.55, expiry_date: daysFromToday(210), batch_number: 'AMX-2502', received_date: daysFromToday(-15) },
     ],
   },
   {
@@ -58,7 +55,7 @@ const DEMO_MEDICATIONS = [
     series: 'Azithromycin',
     stock: { coverDays: 25, reorderDays: 4 },
     batches: [
-      { share: 1, expiry_date: dateFromToday(150), batch_number: 'AZI-2501', received_date: dateFromToday(-30) },
+      { share: 1, expiry_date: daysFromToday(150), batch_number: 'AZI-2501', received_date: daysFromToday(-30) },
     ],
   },
   {
@@ -67,7 +64,7 @@ const DEMO_MEDICATIONS = [
     series: 'Metformin',
     stock: { coverDays: 45, reorderDays: 7 },
     batches: [
-      { share: 1, expiry_date: dateFromToday(500), batch_number: 'MET-2512', received_date: dateFromToday(-10) },
+      { share: 1, expiry_date: daysFromToday(500), batch_number: 'MET-2512', received_date: daysFromToday(-10) },
     ],
   },
   {
@@ -77,8 +74,8 @@ const DEMO_MEDICATIONS = [
     series: 'Amlodipine',
     stock: { coverDays: 30, reorderDays: 5 },
     batches: [
-      { share: 0.4, expiry_date: dateFromToday(20), batch_number: 'AML-2407', received_date: dateFromToday(-120) },
-      { share: 0.6, expiry_date: dateFromToday(300), batch_number: 'AML-2504', received_date: dateFromToday(-25) },
+      { share: 0.4, expiry_date: daysFromToday(20), batch_number: 'AML-2407', received_date: daysFromToday(-120) },
+      { share: 0.6, expiry_date: daysFromToday(300), batch_number: 'AML-2504', received_date: daysFromToday(-25) },
     ],
   },
   {
@@ -87,7 +84,7 @@ const DEMO_MEDICATIONS = [
     series: 'Cetirizine',
     stock: { coverDays: 40, reorderDays: 4 },
     batches: [
-      { share: 1, expiry_date: dateFromToday(365), batch_number: 'CET-2506', received_date: dateFromToday(-35) },
+      { share: 1, expiry_date: daysFromToday(365), batch_number: 'CET-2506', received_date: daysFromToday(-35) },
     ],
   },
   {
@@ -98,7 +95,7 @@ const DEMO_MEDICATIONS = [
     series: 'Cough Syrup',
     stock: { coverDays: 6, reorderDays: 3 },
     batches: [
-      { share: 1, expiry_date: dateFromToday(300), batch_number: 'CSY-2505', received_date: dateFromToday(-40) },
+      { share: 1, expiry_date: daysFromToday(300), batch_number: 'CSY-2505', received_date: daysFromToday(-40) },
     ],
   },
   {
@@ -107,7 +104,7 @@ const DEMO_MEDICATIONS = [
     series: 'Vitamin C',
     stock: { coverDays: 30, reorderDays: 4 },
     batches: [
-      { share: 1, expiry_date: dateFromToday(250), batch_number: 'VITC-2504', received_date: dateFromToday(-30) },
+      { share: 1, expiry_date: daysFromToday(250), batch_number: 'VITC-2504', received_date: daysFromToday(-30) },
     ],
   },
   {
@@ -118,7 +115,7 @@ const DEMO_MEDICATIONS = [
     series: 'Multivitamin',
     stock: { coverDays: 12, reorderDays: 4 },
     batches: [
-      { share: 1, expiry_date: dateFromToday(-10), batch_number: 'MVT-2312', received_date: dateFromToday(-200) },
+      { share: 1, expiry_date: daysFromToday(-10), batch_number: 'MVT-2312', received_date: daysFromToday(-200) },
     ],
   },
   {
@@ -128,33 +125,45 @@ const DEMO_MEDICATIONS = [
     supplier_info: 'Dar Al Dawa - orders@dad.jo',
     low_stock_threshold: 30,
     batches: [
-      { quantity: 200, expiry_date: dateFromToday(600), batch_number: 'VITD-2601', received_date: dateFromToday(-5) },
+      { quantity: 200, expiry_date: daysFromToday(600), batch_number: 'VITD-2601', received_date: daysFromToday(-5) },
     ],
     demand: { avgDaily: 4, trend: 0, days: 5 },
   },
 ];
 
-/** The demo-sales.json series behind a catalog name, or null. */
-function seriesFor(medicationName) {
-  const entry = DEMO_MEDICATIONS.find((med) => med.name === medicationName);
-  return entry?.series || null;
+// The demo-sales.json series of a catalogue medication (e.g. 'Amoxicillin 500mg' -> 'Amoxicillin'),
+// or null for a medication that is not in the demo catalogue.
+export function findDemoSeries(medicationName) {
+  for (const medication of DEMO_MEDICATIONS) {
+    if (medication.name === medicationName && medication.series) {
+      return medication.series;
+    }
+  }
+  return null;
 }
 
-/**
- * Threshold and lot quantities for a series-backed entry, given its recent
- * average daily demand. The threshold is rounded to a multiple of 5 (at least
- * 5), and the last lot takes whatever rounding left over.
- */
-function sizeStock({ stock, batches }, averageDaily) {
-  const total = Math.max(Math.round(averageDaily * stock.coverDays), batches.length);
-  const threshold = Math.max(5, Math.round((averageDaily * stock.reorderDays) / 5) * 5);
-  let left = total;
-  const sized = batches.map(({ share, ...batch }, index) => {
-    const quantity = index === batches.length - 1 ? left : Math.max(1, Math.round(total * share));
-    left -= quantity;
-    return { ...batch, quantity };
+// Works out the reorder threshold and the quantity of each lot from the medication's
+// average daily demand. Example for Amoxicillin (8 days of stock, threshold 3 days)
+// selling 6 a day: 48 units in total and a threshold of 18, rounded to 20.
+//   - the threshold is rounded to a multiple of 5, and is at least 5;
+//   - each lot gets its share of the total; the last lot takes what rounding left over.
+export function sizeStock(medication, averageDaily) {
+  const totalUnits = Math.max(Math.round(averageDaily * medication.stock.coverDays), medication.batches.length);
+  const threshold = Math.max(5, Math.round((averageDaily * medication.stock.reorderDays) / 5) * 5);
+
+  const batches = [];
+  let unitsLeft = totalUnits;
+  medication.batches.forEach((batch, index) => {
+    const isLastBatch = index === medication.batches.length - 1;
+    const quantity = isLastBatch ? unitsLeft : Math.max(1, Math.round(totalUnits * batch.share));
+    unitsLeft -= quantity;
+    batches.push({
+      expiry_date: batch.expiry_date,
+      batch_number: batch.batch_number,
+      received_date: batch.received_date,
+      quantity,
+    });
   });
-  return { low_stock_threshold: threshold, batches: sized };
-}
 
-module.exports = { DEMO_MEDICATIONS, seriesFor, sizeStock, dateFromToday };
+  return { low_stock_threshold: threshold, batches };
+}

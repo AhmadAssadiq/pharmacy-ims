@@ -1,46 +1,42 @@
-/**
- * Creates the database and every table from schema.sql, applies the in-place
- * upgrades for databases made by an older schema (see upgrades.js), then
- * prints the resulting table list so the schema can be verified.
- *
- * Usage: npm run db:migrate   (from /server or the repo root)
- */
-const fs = require('fs');
-const path = require('path');
-const mysql = require('mysql2/promise');
-const env = require('../config/env');
-const { runUpgrades } = require('./upgrades');
+// Creates the database and every table from schema.sql, then lists the tables so you can
+// check them.   npm run db:migrate
+//
+// schema.sql only uses CREATE ... IF NOT EXISTS, so running this again is safe: tables that
+// already exist are left as they are. After a change to the tables themselves, rebuild the
+// database with npm run db:reset (which deletes all its data).
+import fs from 'node:fs';
+import path from 'node:path';
+import mysql from 'mysql2/promise';
+import { config } from '../config.js';
 
-async function migrate() {
-  const schemaPath = path.join(__dirname, 'schema.sql');
-  const sql = fs
-    .readFileSync(schemaPath, 'utf8')
-    .replace(/pharmacy_ims/g, env.db.database);
+// Read schema.sql, using the database name from .env instead of the default "pharmacy_ims"
+const schemaPath = path.join(import.meta.dirname, 'schema.sql');
+const sql = fs.readFileSync(schemaPath, 'utf8').replace(/pharmacy_ims/g, config.database.name);
 
-  // Connect without selecting a database: the script creates it itself.
-  const connection = await mysql.createConnection({
-    host: env.db.host,
-    port: env.db.port,
-    user: env.db.user,
-    password: env.db.password,
-    multipleStatements: true,
-  });
-
-  try {
-    await connection.query(sql);
-    await runUpgrades(connection, env.db.database);
-    const [tables] = await connection.query(
-      'SELECT TABLE_NAME AS name FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? ORDER BY TABLE_NAME',
-      [env.db.database]
-    );
-    console.log(`Database "${env.db.database}" is ready. Tables:`);
-    for (const { name } of tables) console.log(`  - ${name}`);
-  } finally {
-    await connection.end();
-  }
-}
-
-migrate().catch((err) => {
-  console.error('Migration failed:', err.message);
-  process.exit(1);
+// Connect without choosing a database: schema.sql creates it first
+const connection = await mysql.createConnection({
+  host: config.database.host,
+  port: config.database.port,
+  user: config.database.user,
+  password: config.database.password,
+  multipleStatements: true, // schema.sql contains many statements
 });
+
+try {
+  await connection.query(sql);
+
+  // Print the tables that now exist
+  const [tables] = await connection.query(
+    'SELECT TABLE_NAME AS name FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? ORDER BY TABLE_NAME',
+    [config.database.name]
+  );
+  console.log(`Database "${config.database.name}" is ready. Tables:`);
+  for (const table of tables) {
+    console.log(`  - ${table.name}`);
+  }
+} catch (error) {
+  console.error('Migration failed:', error.message);
+  process.exitCode = 1;
+} finally {
+  await connection.end();
+}

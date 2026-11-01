@@ -1,43 +1,41 @@
-/**
- * Computes the inventory flags shown on the staff dashboard (FR 4):
- * low stock (quantity below the medication's own reorder threshold) and near
- * expiry (the next lot to expire falls within 30 days). Pure function so it is
- * easy to test.
- *
- * `expiry_date` is the earliest unexpired lot still holding stock, so it is null
- * when a medication has no sellable stock at all.
- */
-const { LOW_STOCK_THRESHOLD, NEAR_EXPIRY_DAYS } = require('../../../shared/constants.json');
+// Works out the warning flags shown next to each medication on the staff pages (FR 4):
+//   - out of stock:  no sellable units left
+//   - low stock:     fewer units than the medication's reorder threshold
+//   - near expiry:   the next lot to expire does so within 30 days
+//   - expired:       that lot's expiry date has already passed
+import { LOW_STOCK_THRESHOLD, NEAR_EXPIRY_DAYS } from '../constants.js';
+import { daysBetween, todayAsText } from './dates.js';
 
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
-
-function daysUntil(dateStr, today) {
-  const target = new Date(`${String(dateStr).slice(0, 10)}T00:00:00Z`);
-  const base = new Date(`${today.toISOString().slice(0, 10)}T00:00:00Z`);
-  return Math.round((target - base) / MS_PER_DAY);
-}
-
-function computeStockFlags(
-  medication,
-  { today = new Date(), lowStockThreshold, nearExpiryDays = NEAR_EXPIRY_DAYS } = {}
-) {
+// Returns the flags for one medication.
+// `medication` needs: quantity, expiry_date (the next lot to expire, or null when
+// nothing sellable is left) and optionally low_stock_threshold.
+// `todayText` is today's date as 'YYYY-MM-DD' (tests pass a fixed date).
+export function computeStockFlags(medication, todayText = todayAsText()) {
   const quantity = Number(medication.quantity);
-  const threshold = Number(lowStockThreshold ?? medication.low_stock_threshold ?? LOW_STOCK_THRESHOLD);
-  const daysUntilExpiry = medication.expiry_date ? daysUntil(medication.expiry_date, today) : null;
+
+  // Use the medication's own reorder threshold, or the shared default (10) if it has none
+  let threshold = LOW_STOCK_THRESHOLD;
+  if (medication.low_stock_threshold !== undefined && medication.low_stock_threshold !== null) {
+    threshold = Number(medication.low_stock_threshold);
+  }
+
+  // Days until the next lot expires (null when there is no sellable lot)
+  let daysUntilExpiry = null;
+  if (medication.expiry_date) {
+    daysUntilExpiry = daysBetween(todayText, medication.expiry_date);
+  }
 
   return {
     is_out_of_stock: quantity <= 0,
     is_low_stock: quantity < threshold,
-    is_near_expiry: daysUntilExpiry !== null && daysUntilExpiry <= nearExpiryDays,
+    is_near_expiry: daysUntilExpiry !== null && daysUntilExpiry <= NEAR_EXPIRY_DAYS,
     is_expired: daysUntilExpiry !== null && daysUntilExpiry < 0,
     days_until_expiry: daysUntilExpiry,
     low_stock_threshold: threshold,
   };
 }
 
-/** Returns a copy of the medication with the flag fields merged in. */
-function withStockFlags(medication, options) {
-  return { ...medication, ...computeStockFlags(medication, options) };
+// Returns a copy of the medication with its flags added to it.
+export function addStockFlags(medication, todayText = todayAsText()) {
+  return { ...medication, ...computeStockFlags(medication, todayText) };
 }
-
-module.exports = { computeStockFlags, withStockFlags, daysUntil };

@@ -1,27 +1,35 @@
-/**
- * Final Express error handler: converts HttpError instances into JSON
- * responses and hides internal details of unexpected errors. `code` and
- * `params` travel with the English `error` so the client can translate it.
- */
-const { ERROR_CODES } = require('../../../shared/constants.json');
+// The last middleware in app.js: every error thrown in a route ends up here and is
+// turned into a JSON answer for the React app, for example:
+//   { "error": "Medication not found", "code": "MEDICATION_NOT_FOUND" }
+// - error:   an English message
+// - code:    a fixed code the React app uses to show the message in English or Arabic
+// - params:  values for that message (e.g. how many minutes until an account unlocks)
+// - details: per-field messages for forms (e.g. { "name": "Name is required" })
+// Unexpected errors (bugs, database problems) are logged here and shown only as
+// "Internal server error", so no internal details leak to the browser.
+import { ERROR_CODES } from '../constants.js';
 
+// Express knows this is an error handler because it takes 4 arguments.
 // eslint-disable-next-line no-unused-vars
-function errorHandler(err, req, res, next) {
-  // Malformed JSON body
-  if (err.type === 'entity.parse.failed') {
+export function errorHandler(error, req, res, next) {
+  // The request body was not valid JSON
+  if (error.type === 'entity.parse.failed') {
     return res.status(400).json({ error: 'Request body is not valid JSON', code: ERROR_CODES.INVALID_JSON });
   }
 
-  const status = err.status || 500;
-  if (status >= 500) console.error(err);
+  // Errors made with createError(...) carry a status; anything else is an unexpected 500
+  const status = error.status || 500;
 
-  const internal = status >= 500;
-  const body = { error: internal ? 'Internal server error' : err.message };
-  const code = internal ? ERROR_CODES.INTERNAL : err.code;
-  if (code) body.code = code;
-  if (!internal && err.params) body.params = err.params;
-  if (err.details) body.details = err.details;
+  if (status >= 500) {
+    console.error(error);
+    const body = { error: 'Internal server error', code: ERROR_CODES.INTERNAL };
+    if (error.details) body.details = error.details;
+    return res.status(status).json(body);
+  }
+
+  const body = { error: error.message };
+  if (error.code) body.code = error.code;
+  if (error.params) body.params = error.params;
+  if (error.details) body.details = error.details;
   return res.status(status).json(body);
 }
-
-module.exports = errorHandler;

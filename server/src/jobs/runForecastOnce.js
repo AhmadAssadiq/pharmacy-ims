@@ -1,31 +1,34 @@
-/**
- * Runs the reorder forecast a single time and prints the result.
- * Useful for demos and testing: npm run forecast
- */
-const pool = require('../config/db');
-const forecastService = require('../services/forecastService');
-const demoSalesService = require('../services/demoSalesService');
+// Runs the reorder forecast once and prints the result for each medication.
+// Handy for demos and testing:   npm run forecast -w server
+import { db } from '../db.js';
+import { runForecast } from '../services/forecastService.js';
+import { fillMissingDemoSales } from '../services/demoSalesService.js';
 
-demoSalesService
-  .topUp()
-  .then((filled) => {
-    if (filled > 0) console.log(`Filled ${filled} missing demo sales day(s)`);
-    return forecastService.runForecast();
-  })
-  .then(({ summary, predictions }) => {
-    console.log('Summary:', summary);
-    for (const p of predictions) {
-      const detail =
-        p.status === 'alert'
-          ? `ALERT in ${p.days_until_threshold} day(s) (${p.predicted_date})`
-          : p.status === 'ok'
-            ? 'ok'
-            : `no alert (${p.reason || 'insufficient data'})`;
-      console.log(`  medication ${p.medication_id}: ${detail}`);
+try {
+  // Fill any demo sales days missing since the last seed, like the background job does
+  const addedDays = await fillMissingDemoSales();
+  if (addedDays > 0) {
+    console.log(`Filled ${addedDays} missing demo sales day(s)`);
+  }
+
+  const { summary, predictions } = await runForecast();
+  console.log('Summary:', summary);
+
+  for (const prediction of predictions) {
+    let result;
+    if (prediction.status === 'alert') {
+      result = `ALERT in ${prediction.days_until_threshold} day(s) (${prediction.predicted_date})`;
+    } else if (prediction.status === 'ok') {
+      result = 'ok';
+    } else {
+      result = `no alert (${prediction.reason || 'insufficient data'})`;
     }
-  })
-  .catch((err) => {
-    console.error('Forecast failed:', err.message);
-    process.exitCode = 1;
-  })
-  .finally(() => pool.end());
+    console.log(`  medication ${prediction.medication_id}: ${result}`);
+  }
+} catch (error) {
+  console.error('Forecast failed:', error.message);
+  process.exitCode = 1;
+} finally {
+  // Close the database connections so the script can exit
+  await db.end();
+}

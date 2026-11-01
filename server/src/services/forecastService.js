@@ -1,103 +1,175 @@
-/**
- * Reorder-alert forecasting (FR 6, FR 6.1, FR 6.2, UC-3).
- *
- * runForecast():
- *   1. sends every medication's sales history to the ML service (/train)
- *   2. asks it which medications will fall below the safe threshold within
- *      the next 7 days (/predict), given the current stock levels
- *   3. writes / refreshes an active row in `reorder_alerts` for each predicted
- *      breach and clears active alerts for medications that are fine again.
- *   Medications with insufficient history get no alert (UC-3 alt. flow).
- */
-const env = require('../config/env');
-const medicationModel = require('../models/medicationModel');
-const salesHistoryModel = require('../models/salesHistoryModel');
-const reorderAlertModel = require('../models/reorderAlertModel');
-const HttpError = require('../utils/httpError');
-const { FORECAST_HORIZON_DAYS, ERROR_CODES } = require('../../../shared/constants.json');
+// Reorder alerts and forecast charts (FR 6, FR 6.1, FR 6.2, UC-3).
+//
+// The forecasting itself happens in the Python service (ml-service/). This file talks to it
+// over HTTP:
+//   POST /train   - "here is each medication's sales history, train a model for each"
+//   POST /predict - "with this much stock, when will each medication fall below its threshold?"
+//
+// runForecast() is the background job (hourly, at start-up and soon after a sale):
+//   1. send every medication's sales history to /train
+//   2. ask /predict which medications will drop below their reorder threshold within 7 days
+//   3. create, update or clear rows in reorder_alerts to match.
+// Medications with too little history get no model and therefore no alert (UC-3 alternative flow).
+import createError from 'http-errors';
+import { db } from '../db.js';
+import { config } from '../config.js';
+import { ERROR_CODES, FORECAST_HORIZON_DAYS } from '../constants.js';
+import { todayAsText, addDaysToDate } from '../utils/dates.js';
+import { getAllMedications, findMedicationById } from './medicationService.js';
+import { getAllSalesHistory, getSalesHistoryOfMedication } from './salesService.js';
 
-async function callMl(path, body) {
-  const response = await fetch(`${env.mlServiceUrl}${path}`, {
+// Sends `body` to the ML service at `path` and returns its JSON answer.
+async function callMlService(path, body) {
+  const response = await fetch(`${config.mlServiceUrl}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  if (!response.ok) throw new Error(`ML service ${path} responded ${response.status}`);
+  if (!response.ok) {
+    throw new Error(`ML service ${path} responded ${response.status}`);
+  }
   return response.json();
 }
 
-function groupSalesByMedication(sales) {
-  const grouped = new Map();
-  for (const row of sales) {
-    if (!grouped.has(row.medication_id)) grouped.set(row.medication_id, []);
-    grouped.get(row.medication_id).push({ date: row.date, quantity_sold: row.quantity_sold });
-  }
-  return grouped;
+// ----------------------------------------------------------------------------
+// reorder_alerts table
+// ----------------------------------------------------------------------------
+
+// The SELECT used for every alert read. The current quantity is the sum of the medication's
+// unexpired lots (expired units cannot be sold, so they must not count).
+const SELECT_ALERTS = `
+  SELECT a.id, a.medication_id, m.name AS medication_name,
+         CAST(COALESCE((SELECT SUM(b.quantity) FROM medication_batches b
+                        WHERE b.medication_id = m.id AND b.expiry_date >= CURDATE()), 0) AS SIGNED)
+           AS current_quantity,
+         m.low_stock_threshold,
+         a.predicted_date, a.days_until_threshold, a.status
+  FROM reorder_alerts a JOIN medications m ON m.id = a.medication_id`;
+
+// The active alert of a medication, or null.
+async function findActiveAlert(medicationId) {
+  const [rows] = await db.query(`${SELECT_ALERTS} WHERE a.medication_id = ? AND a.status = 'active' LIMIT 1`, [
+    medicationId,
+  ]);
+  return rows[0] || null;
 }
 
-async function runForecast() {
-  const [medications, sales] = await Promise.all([medicationModel.findAll(), salesHistoryModel.findAll()]);
-  const salesByMed = groupSalesByMedication(sales);
+// The most recently dismissed alert of a medication, or null.
+async function findLastDismissedAlert(medicationId) {
+  const [rows] = await db.query(
+    `${SELECT_ALERTS} WHERE a.medication_id = ? AND a.status = 'dismissed' ORDER BY a.id DESC LIMIT 1`,
+    [medicationId]
+  );
+  return rows[0] || null;
+}
 
-  // 1. Train one model per medication on its historical sales (FR 6.1).
-  const trainPayload = {
-    medications: medications.map((m) => ({ medication_id: m.id, sales: salesByMed.get(m.id) || [] })),
-  };
-  const { results: trainResults } = await callMl('/train', trainPayload);
+// Every active alert for the staff dashboard, most urgent first.
+export async function getActiveAlerts() {
+  const [rows] = await db.query(
+    `${SELECT_ALERTS} WHERE a.status = 'active' ORDER BY a.days_until_threshold ASC, m.name ASC`
+  );
+  return rows;
+}
 
-  // 2. Predict threshold breaches from the current stock (FR 6.2).
-  const predictPayload = {
-    as_of_date: new Date().toISOString().slice(0, 10),
+// Staff dismiss an alert. Returns the dismissed alert, or throws 404.
+export async function dismissAlert(id) {
+  const [result] = await db.query(`UPDATE reorder_alerts SET status = 'dismissed' WHERE id = ? AND status = 'active'`, [
+    id,
+  ]);
+  if (result.affectedRows === 0) {
+    throw createError(404, 'Active alert not found', { code: ERROR_CODES.ALERT_NOT_FOUND });
+  }
+  const [rows] = await db.query(`${SELECT_ALERTS} WHERE a.id = ?`, [id]);
+  return rows[0];
+}
+
+// ----------------------------------------------------------------------------
+// The background forecast
+// ----------------------------------------------------------------------------
+
+// Trains every medication's model, predicts the next 7 days and updates reorder_alerts.
+// Returns { summary, trainResults, predictions }.
+export async function runForecast() {
+  const medications = await getAllMedications();
+  const sales = await getAllSalesHistory();
+
+  // Group the sales rows by medication: { medicationId: [{ date, quantity_sold }, ...] }
+  const salesByMedication = {};
+  for (const row of sales) {
+    if (!salesByMedication[row.medication_id]) {
+      salesByMedication[row.medication_id] = [];
+    }
+    salesByMedication[row.medication_id].push({ date: row.date, quantity_sold: row.quantity_sold });
+  }
+
+  // 1. Train one model per medication on its own sales history (FR 6.1)
+  const trainRequest = { medications: [] };
+  for (const medication of medications) {
+    trainRequest.medications.push({ medication_id: medication.id, sales: salesByMedication[medication.id] || [] });
+  }
+  const { results: trainResults } = await callMlService('/train', trainRequest);
+
+  // 2. Predict, from the current stock, which medications will fall below their threshold (FR 6.2)
+  const predictRequest = {
+    as_of_date: todayAsText(),
     horizon_days: FORECAST_HORIZON_DAYS,
-    medications: medications.map((m) => ({
-      medication_id: m.id,
-      current_quantity: m.quantity,
-      threshold: m.low_stock_threshold,
+    medications: medications.map((medication) => ({
+      medication_id: medication.id,
+      current_quantity: medication.quantity,
+      threshold: medication.low_stock_threshold,
     })),
   };
-  const { results: predictions } = await callMl('/predict', predictPayload);
+  const { results: predictions } = await callMlService('/predict', predictRequest);
 
-  // 3. Synchronise reorder_alerts with the predictions.
+  // 3. Make reorder_alerts match the predictions, counting what changed
   const summary = {
-    trained: 0,
+    trained: trainResults.filter((result) => result.trained).length,
     insufficientData: 0,
     alertsCreated: 0,
     alertsUpdated: 0,
     alertsCleared: 0,
     alertsSuppressed: 0,
   };
-  summary.trained = trainResults.filter((r) => r.trained).length;
 
   for (const prediction of predictions) {
     const medicationId = prediction.medication_id;
-    const active = await reorderAlertModel.findActiveByMedicationId(medicationId);
+    const activeAlert = await findActiveAlert(medicationId);
 
+    // Not enough history to predict: no alert (UC-3 alternative flow)
     if (prediction.status === 'insufficient_data') {
       summary.insufficientData += 1;
-      continue; // no prediction possible -> no alert
+      continue;
     }
 
     if (prediction.status === 'alert') {
-      const values = {
-        predictedDate: prediction.predicted_date,
-        daysUntilThreshold: prediction.days_until_threshold,
-      };
-      if (active) {
-        await reorderAlertModel.updatePrediction(active.id, values);
+      // Already has an active alert: refresh its dates
+      if (activeAlert) {
+        await db.query('UPDATE reorder_alerts SET predicted_date = ?, days_until_threshold = ? WHERE id = ?', [
+          prediction.predicted_date,
+          prediction.days_until_threshold,
+          activeAlert.id,
+        ]);
         summary.alertsUpdated += 1;
         continue;
       }
-      // Staff dismissed this exact prediction already - do not raise it again
-      // until the forecast changes.
-      const dismissed = await reorderAlertModel.findLatestDismissedByMedicationId(medicationId);
-      if (dismissed && String(dismissed.predicted_date).slice(0, 10) === values.predictedDate) {
+
+      // Staff already dismissed this exact prediction: do not raise it again until it changes
+      const dismissedAlert = await findLastDismissedAlert(medicationId);
+      if (dismissedAlert && String(dismissedAlert.predicted_date).slice(0, 10) === prediction.predicted_date) {
         summary.alertsSuppressed += 1;
         continue;
       }
-      await reorderAlertModel.create({ medicationId, ...values });
+
+      // A new alert
+      await db.query('INSERT INTO reorder_alerts (medication_id, predicted_date, days_until_threshold) VALUES (?, ?, ?)', [
+        medicationId,
+        prediction.predicted_date,
+        prediction.days_until_threshold,
+      ]);
       summary.alertsCreated += 1;
-    } else if (active) {
-      await reorderAlertModel.deleteActiveByMedicationId(medicationId);
+    } else if (activeAlert) {
+      // Stock is fine again: remove the active alert
+      await db.query(`DELETE FROM reorder_alerts WHERE medication_id = ? AND status = 'active'`, [medicationId]);
       summary.alertsCleared += 1;
     }
   }
@@ -105,93 +177,88 @@ async function runForecast() {
   return { summary, trainResults, predictions };
 }
 
-/** Sums sales per calendar day, the same way the ML service aggregates them. */
-function aggregateByDay(sales) {
-  const totals = new Map();
-  for (const row of sales) {
+// ----------------------------------------------------------------------------
+// The Forecast page (charts for one medication)
+// ----------------------------------------------------------------------------
+
+// Adds up sales per day: [{ date, quantity_sold }] with one entry per date, oldest first.
+// (Several sales of the same medication on one day become one total.)
+function totalSalesPerDay(rows) {
+  const totals = {};
+  for (const row of rows) {
     const date = String(row.date).slice(0, 10);
-    totals.set(date, (totals.get(date) || 0) + Number(row.quantity_sold));
+    totals[date] = (totals[date] || 0) + Number(row.quantity_sold);
   }
-  return [...totals.entries()]
-    .map(([date, quantity_sold]) => ({ date, quantity_sold }))
-    .sort((a, b) => a.date.localeCompare(b.date));
+  const days = [];
+  for (const date of Object.keys(totals).sort()) {
+    days.push({ date, quantity_sold: totals[date] });
+  }
+  return days;
 }
 
-function addDays(date, days) {
-  const shifted = new Date(`${date}T00:00:00Z`);
-  shifted.setUTCDate(shifted.getUTCDate() + days);
-  return shifted.toISOString().slice(0, 10);
+// How many days from the day after `dateText` to the last day of the 3rd month after it.
+// The monthly chart's outlook runs that far (in November: to the end of February).
+export function outlookDays(dateText) {
+  const [year, month] = dateText.split('-').map(Number);
+  // Date.UTC(year, month + 3, 0) is "day 0" of the 4th month = the last day of the 3rd month
+  const lastDay = Date.UTC(year, month + 3, 0);
+  const millisecondsPerDay = 86400000;
+  return Math.round((lastDay - Date.parse(`${dateText}T00:00:00Z`)) / millisecondsPerDay);
 }
 
-// The monthly chart's outlook runs to the end of the third month after this one.
-const OUTLOOK_MONTHS = 3;
+// Sales history and forecast of one medication, for the charts on the Forecast page.
+// It retrains the model first, so the chart includes sales made seconds ago.
+// When the model uses seasons (a year or more of history), it also returns an `outlook`
+// of predicted daily demand for the monthly chart. Only the 7-day forecast drives alerts.
+export async function getMedicationForecast(medicationId) {
+  const medication = await findMedicationById(medicationId);
+  if (!medication) {
+    throw createError(404, 'Medication not found', { code: ERROR_CODES.MEDICATION_NOT_FOUND });
+  }
 
-/** Days from the day after `date` to the last day of the OUTLOOK_MONTHS-th month after it. */
-function outlookDays(date) {
-  const [year, month] = date.split('-').map(Number);
-  const lastDay = Date.UTC(year, month + OUTLOOK_MONTHS, 0); // day 0 = last day of the month before
-  return Math.round((lastDay - Date.parse(`${date}T00:00:00Z`)) / 86_400_000);
-}
+  const history = totalSalesPerDay(await getSalesHistoryOfMedication(medicationId));
+  const today = todayAsText();
 
-/**
- * Sales history and forecast for one medication, for the staff forecast charts.
- *
- * This retrains on the way in rather than reusing whatever the scheduled job
- * last wrote to disk, so the chart always reflects sales recorded since the last
- * run - including one made seconds ago.
- *
- * When the model has the yearly seasonal wave (a year or more of history), an
- * `outlook` of daily predicted demand to the end of the third month ahead is
- * included for the monthly chart (GP2 addition). Only the 7-day forecast feeds
- * the reorder decision.
- */
-async function getMedicationForecast(medicationId) {
-  const medication = await medicationModel.findById(medicationId);
-  if (!medication) throw new HttpError(404, 'Medication not found', undefined, { code: ERROR_CODES.MEDICATION_NOT_FOUND });
-
-  const history = aggregateByDay(await salesHistoryModel.findByMedicationId(medicationId));
-  const asOfDate = new Date().toISOString().slice(0, 10);
-
-  const { results: trainResults } = await callMl('/train', {
+  // 1. Retrain this medication's model on its latest history
+  const { results: trainResults } = await callMlService('/train', {
     medications: [{ medication_id: medicationId, sales: history }],
   });
   const training = trainResults[0] || {};
 
-  const { results: predictions } = await callMl('/predict', {
-    as_of_date: asOfDate,
+  // 2. Predict the next 7 days from the current stock
+  const { results: predictions } = await callMlService('/predict', {
+    as_of_date: today,
     horizon_days: FORECAST_HORIZON_DAYS,
     medications: [
-      {
-        medication_id: medicationId,
-        current_quantity: medication.quantity,
-        threshold: medication.low_stock_threshold,
-      },
+      { medication_id: medicationId, current_quantity: medication.quantity, threshold: medication.low_stock_threshold },
     ],
   });
   const prediction = predictions[0] || { status: 'insufficient_data' };
 
+  // 3. Seasonal models only: predicted demand for the monthly chart (to the end of the 3rd month ahead)
   let outlook = [];
   if (training.seasonal) {
-    const { results } = await callMl('/predict', {
-      as_of_date: asOfDate,
-      horizon_days: outlookDays(asOfDate),
+    const { results } = await callMlService('/predict', {
+      as_of_date: today,
+      horizon_days: outlookDays(today),
       medications: [{ medication_id: medicationId, current_quantity: 0, threshold: 0 }],
     });
-    outlook = (results[0]?.daily_demand || []).map((demand, index) => ({
-      date: addDays(asOfDate, index + 1),
+    const dailyDemand = (results[0] && results[0].daily_demand) || [];
+    outlook = dailyDemand.map((demand, index) => ({
+      date: addDaysToDate(today, index + 1),
       predicted_demand: Math.round(demand * 100) / 100,
     }));
   }
 
-  // Walk the predicted demand forward to show how the stock is expected to run
-  // down - this is what the reorder alert is derived from.
-  let remaining = Number(medication.quantity);
+  // 4. Walk the predicted demand forward to show how the stock runs down - this is
+  //    exactly what the reorder alert is based on
+  let stockLeft = Number(medication.quantity);
   const forecast = (prediction.daily_demand || []).map((demand, index) => {
-    remaining = Math.max(remaining - demand, 0);
+    stockLeft = Math.max(stockLeft - demand, 0);
     return {
-      date: addDays(asOfDate, index + 1),
+      date: addDaysToDate(today, index + 1),
       predicted_demand: Math.round(demand * 100) / 100,
-      projected_stock: Math.round(remaining * 100) / 100,
+      projected_stock: Math.round(stockLeft * 100) / 100,
     };
   });
 
@@ -202,7 +269,7 @@ async function getMedicationForecast(medicationId) {
       quantity: medication.quantity,
       low_stock_threshold: medication.low_stock_threshold,
     },
-    as_of_date: asOfDate,
+    as_of_date: today,
     history,
     forecast,
     outlook,
@@ -216,15 +283,3 @@ async function getMedicationForecast(medicationId) {
     mae: training.mae ?? null,
   };
 }
-
-async function listActiveAlerts() {
-  return reorderAlertModel.findActive();
-}
-
-async function dismissAlert(id) {
-  const dismissed = await reorderAlertModel.dismiss(id);
-  if (!dismissed) throw new HttpError(404, 'Active alert not found', undefined, { code: ERROR_CODES.ALERT_NOT_FOUND });
-  return reorderAlertModel.findById(id);
-}
-
-module.exports = { runForecast, getMedicationForecast, listActiveAlerts, dismissAlert, outlookDays };

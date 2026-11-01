@@ -1,50 +1,61 @@
-/**
- * Keeps the demo sales history up to date (GP2 addition).
- *
- * The seed writes history up to the day before it runs. When the server is
- * started days or weeks later, the days in between would have no sales, and
- * the forecast would read that as demand falling to zero. So before each
- * forecast run, every day from a demo medication's first sale up to yesterday
- * that has no sales_history row at all is filled from data/demo-sales.json.
- * A day that already has a row is never touched - that includes days with
- * real sales recorded through dispensing - and medications staff added
- * themselves are left alone.
- *
- * A real pharmacy would turn this off (DEMO_SALES_TOPUP=false): its history is
- * its own sales.
- */
-const env = require('../config/env');
-const medicationModel = require('../models/medicationModel');
-const salesHistoryModel = require('../models/salesHistoryModel');
-const { seriesFor } = require('../db/demoCatalog');
-const demoSales = require('../db/demoSales');
+// Keeps the demo sales history up to date (GP2 addition).
+//
+// The seed writes sales history up to the day before it runs. If the server is started days
+// or weeks later, the days in between would have no sales, and the forecast would read that
+// as demand dropping to zero. So before each forecast run, this fills every missing day -
+// from a demo medication's first sale up to yesterday - with the numbers in
+// data/demo-sales.json.
+//
+// A day that already has any sales row is never touched (that includes real sales made on
+// the Dispense page), and medications that staff added themselves are left alone.
+// A real pharmacy would switch this off with DEMO_SALES_TOPUP=false in server/.env.
+import { config } from '../config.js';
+import { todayAsText, addDaysToDate, listDatesBetween } from '../utils/dates.js';
+import { findDemoSeries } from '../db/demoCatalog.js';
+import { getDemoUnits } from '../db/demoSales.js';
+import { getAllMedications } from './medicationService.js';
+import { getSaleDatesOfMedication, insertSalesHistoryRows } from './salesService.js';
 
-/** The missing days of one medication, as rows ready to insert. */
-function missingRows(medicationId, series, recordedDates, yesterday) {
-  if (recordedDates.length === 0) return []; // never seeded: nothing to continue
-  const recorded = new Set(recordedDates);
-  return demoSales
-    .datesBetween(recordedDates[0], yesterday)
-    .filter((date) => !recorded.has(date))
-    .map((date) => ({ medication_id: medicationId, quantity_sold: demoSales.unitsOn(series, date), date }))
-    .filter((row) => row.quantity_sold !== null);
-}
+// The rows to add for one medication: one per day with no sales row, from its first
+// recorded day up to yesterday. `recordedDates` are the days it already has (oldest first).
+export function findMissingDays(medicationId, series, recordedDates, yesterday) {
+  // A medication that was never seeded has nothing to continue
+  if (recordedDates.length === 0) {
+    return [];
+  }
 
-/** Fills the gaps up to yesterday. Returns the number of rows inserted. */
-async function topUp(today = new Date().toISOString().slice(0, 10)) {
-  if (!env.demoSalesTopUp) return 0;
-  const yesterday = demoSales.addDays(today, -1);
-  let inserted = 0;
-  for (const medication of await medicationModel.findAll()) {
-    const series = seriesFor(medication.name);
-    if (!series) continue;
-    const dates = await salesHistoryModel.findSaleDates(medication.id);
-    const rows = missingRows(medication.id, series, dates, yesterday);
-    for (let i = 0; i < rows.length; i += 1000) {
-      inserted += await salesHistoryModel.bulkInsert(rows.slice(i, i + 1000));
+  // A Set makes "does this day already have sales?" a quick lookup
+  const daysWithSales = new Set(recordedDates);
+
+  const rows = [];
+  for (const dateText of listDatesBetween(recordedDates[0], yesterday)) {
+    if (daysWithSales.has(dateText)) {
+      continue; // this day already has sales
+    }
+    const units = getDemoUnits(series, dateText);
+    if (units !== null) {
+      rows.push({ medication_id: medicationId, quantity_sold: units, date: dateText });
     }
   }
-  return inserted;
+  return rows;
 }
 
-module.exports = { topUp, missingRows };
+// Fills the missing days for every demo medication. Returns how many rows were added.
+export async function fillMissingDemoSales() {
+  if (!config.demoSalesTopUp) {
+    return 0;
+  }
+
+  const yesterday = addDaysToDate(todayAsText(), -1);
+  let addedCount = 0;
+  for (const medication of await getAllMedications()) {
+    const series = findDemoSeries(medication.name);
+    if (!series) {
+      continue; // not a demo medication
+    }
+    const recordedDates = await getSaleDatesOfMedication(medication.id);
+    const rows = findMissingDays(medication.id, series, recordedDates, yesterday);
+    addedCount += await insertSalesHistoryRows(rows);
+  }
+  return addedCount;
+}

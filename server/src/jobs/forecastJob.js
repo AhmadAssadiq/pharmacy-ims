@@ -1,42 +1,74 @@
-/**
- * Background scheduler that runs the reorder forecast on a cron schedule
- * (FORECAST_CRON, default hourly) and once shortly after start-up, so the
- * ML model "runs in the background" as described in UC-3.
- */
-const cron = require('node-cron');
-const env = require('../config/env');
-const forecastService = require('../services/forecastService');
-const demoSalesService = require('../services/demoSalesService');
+// Runs the reorder forecast in the background (UC-3: "the ML model runs in the background").
+//
+// It runs:
+//   - every hour (FORECAST_CRON in server/.env),
+//   - 5 seconds after the server starts,
+//   - 10 seconds after a sale or a collected preorder, so reorder alerts react to real
+//     sales within seconds instead of waiting for the next hour.
+// Each run first fills any missing demo sales days, then trains, predicts and updates alerts.
+import cron from 'node-cron';
+import { config } from '../config.js';
+import { runForecast } from '../services/forecastService.js';
+import { fillMissingDemoSales } from '../services/demoSalesService.js';
 
-const STARTUP_DELAY_MS = 5_000;
-let running = false;
+const STARTUP_DELAY_MS = 5000;
+const AFTER_SALE_DELAY_MS = 10000;
 
-async function runForecastSafely(trigger) {
-  if (running) return; // never overlap two runs
-  running = true;
+// True while a forecast is running, so two runs never overlap
+let isForecastRunning = false;
+
+// The timer waiting to run the forecast after a sale (null when none is waiting)
+let afterSaleTimer = null;
+
+// Runs the forecast once and prints a one-line summary. `reason` says why it ran
+// (startup, cron, sale). Errors are printed, never thrown: the server keeps running
+// even when the Python service is offline.
+export async function runForecastNow(reason) {
+  if (isForecastRunning) {
+    return false; // another run is busy
+  }
+  isForecastRunning = true;
   try {
-    const filled = await demoSalesService.topUp();
-    if (filled > 0) console.log(`[forecast:${trigger}] filled ${filled} missing demo sales day(s)`);
-    const { summary } = await forecastService.runForecast();
+    const addedDays = await fillMissingDemoSales();
+    if (addedDays > 0) {
+      console.log(`[forecast:${reason}] filled ${addedDays} missing demo sales day(s)`);
+    }
+    const { summary } = await runForecast();
     console.log(
-      `[forecast:${trigger}] trained=${summary.trained} insufficient=${summary.insufficientData} ` +
+      `[forecast:${reason}] trained=${summary.trained} insufficient=${summary.insufficientData} ` +
         `created=${summary.alertsCreated} updated=${summary.alertsUpdated} cleared=${summary.alertsCleared}`
     );
-  } catch (err) {
-    console.warn(`[forecast:${trigger}] skipped - ${err.message}`);
+  } catch (error) {
+    console.warn(`[forecast:${reason}] skipped - ${error.message}`);
   } finally {
-    running = false;
+    isForecastRunning = false;
   }
+  return true;
 }
 
-function scheduleForecastJob() {
-  if (!cron.validate(env.forecastCron)) {
-    console.warn(`Invalid FORECAST_CRON "${env.forecastCron}" - forecast job not scheduled`);
+// Asks for a forecast run soon after a sale (called by routes/sales.js and routes/preorders.js).
+// The run starts 10 seconds later, so several sales close together cause only ONE run.
+export function requestForecastSoon() {
+  if (afterSaleTimer) {
+    return; // a run is already waiting and will include this sale too
+  }
+  afterSaleTimer = setTimeout(async () => {
+    afterSaleTimer = null;
+    const didRun = await runForecastNow('sale');
+    // If another run was busy, try again shortly so this sale is not missed
+    if (!didRun) {
+      requestForecastSoon();
+    }
+  }, AFTER_SALE_DELAY_MS);
+}
+
+// Sets up the hourly run and the start-up run (called once by index.js).
+export function startForecastJob() {
+  if (!cron.validate(config.forecastCron)) {
+    console.warn(`Invalid FORECAST_CRON "${config.forecastCron}" - forecast job not scheduled`);
     return;
   }
-  cron.schedule(env.forecastCron, () => runForecastSafely('cron'));
-  setTimeout(() => runForecastSafely('startup'), STARTUP_DELAY_MS);
-  console.log(`Forecast job scheduled (${env.forecastCron})`);
+  cron.schedule(config.forecastCron, () => runForecastNow('cron'));
+  setTimeout(() => runForecastNow('startup'), STARTUP_DELAY_MS);
+  console.log(`Forecast job scheduled (${config.forecastCron})`);
 }
-
-module.exports = { scheduleForecastJob, runForecastSafely };

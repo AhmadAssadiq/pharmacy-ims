@@ -1,60 +1,37 @@
-/**
- * Forgot / reset password (GP2 addition).
- *
- * - Asking for a link always answers the same way, whether or not the email
- *   has an account, and the token work runs after the response is decided, so
- *   neither the body nor the response time reveals which emails are registered.
- * - A link carries a 32-byte random token; only its SHA-256 is stored. It is
- *   valid for PASSWORD_RESET_MINUTES, works once, and a newer link retires it.
- * - Resetting applies the registration password rules, hashes with the same
- *   bcrypt cost, clears the login lockout for that account, and does not sign
- *   the user in: they go back to the login page.
- * - Both endpoints are rate limited per IP, and asking for a link per email too.
- *
- * The link is emailed through mailService (SMTP settings in server/.env), in
- * the language the request came from. Without SMTP settings nothing is sent
- * and a warning is logged once. With AUTH_RESET_DEBUG=true outside production
- * the link is also printed to the server console.
- */
-const bcrypt = require('bcryptjs');
-const pool = require('../config/db');
-const env = require('../config/env');
-const userModel = require('../models/userModel');
-const passwordResetModel = require('../models/passwordResetModel');
-const { BCRYPT_ROUNDS } = require('./authService');
-const mailService = require('./mailService');
-const { defaultTracker } = require('./loginAttemptService');
-const { createRateLimiter } = require('./rateLimitService');
-const { generateToken, hashToken, tokenState } = require('../utils/resetToken');
-const { validateForgotPassword, validateResetPassword } = require('../validation/authValidation');
-const HttpError = require('../utils/httpError');
-const { ERROR_CODES, PASSWORD_RESET_MINUTES } = require('../../../shared/constants.json');
+// "Forgot password" and "reset password" (GP2 addition).
+//
+// How it works:
+// 1. The user types their email. If an account exists, we create a random secret token,
+//    save only its SHA-256 hash in the password_resets table, and email them a link
+//    containing the token. The link works once and expires after 15 minutes.
+// 2. The link opens the reset page. When they choose a new password, we hash the token
+//    from the link, find the matching row, and if it is still valid we change the password.
+// 3. Changing the password also records the time (users.password_changed_at), so every
+//    login token made before that moment stops working (see middleware/auth.js).
+//
+// The answer to step 1 is always the same, whether or not the email has an account,
+// so nobody can use this form to find out who is registered.
+import crypto from 'node:crypto';
+import bcrypt from 'bcryptjs';
+import createError from 'http-errors';
+import { db, runInTransaction } from '../db.js';
+import { config } from '../config.js';
+import { ERROR_CODES, PASSWORD_RESET_MINUTES } from '../constants.js';
+import { resetPasswordSchema } from '../validation/authSchemas.js';
+import { validate } from '../validation/validate.js';
+import { BCRYPT_ROUNDS, findUserByEmail, findUserById } from './authService.js';
+import { clearFailedLogins } from './loginLockout.js';
+import { isEmailConfigured, warnEmailNotConfigured, sendEmail } from './emailService.js';
 
-const WINDOW_MINUTES = 15;
-const WINDOW_MS = WINDOW_MINUTES * 60 * 1000;
-const limiters = {
-  forgotByIp: createRateLimiter({ limit: 10, windowMs: WINDOW_MS }),
-  forgotByEmail: createRateLimiter({ limit: 3, windowMs: WINDOW_MS }),
-  resetByIp: createRateLimiter({ limit: 10, windowMs: WINDOW_MS }),
-};
-
-function limit(limiter, key) {
-  const { allowed, retryAfterMs } = limiter.hit(key);
-  if (!allowed) {
-    const minutes = Math.ceil(retryAfterMs / 60000);
-    throw new HttpError(429, `Too many requests. Try again in ${minutes} minute(s).`, undefined, {
-      code: ERROR_CODES.RATE_LIMITED,
-      params: { count: minutes },
-    });
-  }
+// SHA-256 hash of a token, written as 64 hex characters. Only this is stored in the database,
+// so someone who copies the table still cannot use it to reset a password.
+function hashToken(token) {
+  return crypto.createHash('sha256').update(String(token), 'utf8').digest('hex');
 }
 
-const invalidLink = () =>
-  new HttpError(400, 'This reset link is invalid or has expired', undefined, { code: ERROR_CODES.RESET_TOKEN_INVALID });
-
-/** The reset email, in English or Arabic. Plain text, so it reads the same everywhere. */
-function resetEmail(lang, { name, link, minutes }) {
-  if (lang === 'ar') {
+// The reset email, in English or Arabic. Plain text so it looks the same in every mail app.
+export function buildResetEmail(language, { name, link, minutes }) {
+  if (language === 'ar') {
     return {
       subject: 'إعادة تعيين كلمة المرور - Pharmacy IMS',
       text: [
@@ -84,83 +61,104 @@ function resetEmail(lang, { name, link, minutes }) {
   };
 }
 
-/** Issues a token for `email` if it has an account. Runs after the response is decided. */
-async function issueResetToken(email, lang = 'en') {
-  const user = await userModel.findByEmail(email);
-  if (!user) return;
-
-  const { token, hash } = generateToken();
-  const conn = await pool.getConnection();
-  try {
-    await conn.beginTransaction();
-    await passwordResetModel.invalidateUnusedForUser(user.id, conn);
-    await passwordResetModel.create({ userId: user.id, tokenHash: hash, minutes: PASSWORD_RESET_MINUTES }, conn);
-    await conn.commit();
-  } catch (err) {
-    await conn.rollback();
-    throw err;
-  } finally {
-    conn.release();
+// Creates a reset token for `email` and emails the link, if the account exists.
+async function createAndSendResetLink(email, language) {
+  const user = await findUserByEmail(email);
+  if (!user) {
+    return; // no account: do nothing, but the caller still gives the same answer
   }
 
-  const link = `${env.clientOrigin}/reset-password?token=${token}`;
-  if (env.authResetDebug && env.nodeEnv !== 'production') {
+  // A random token: 32 random bytes written as 64 hex characters
+  const token = crypto.randomBytes(32).toString('hex');
+
+  await runInTransaction(async (connection) => {
+    // Retire any older unused link, so only the newest one works
+    await connection.query(
+      'UPDATE password_resets SET used_at = NOW() WHERE user_id = ? AND used_at IS NULL',
+      [user.id]
+    );
+    // Save the hash of the new token, valid for 15 minutes (the time is worked out by MySQL)
+    await connection.query(
+      'INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL ? MINUTE))',
+      [user.id, hashToken(token), PASSWORD_RESET_MINUTES]
+    );
+  });
+
+  const link = `${config.clientOrigin}/reset-password?token=${token}`;
+
+  // For development: print the link to the server console (never in production)
+  if (config.authResetDebug && config.nodeEnv !== 'production') {
     console.log(`[password reset] link for ${email} (valid ${PASSWORD_RESET_MINUTES} min): ${link}`);
   }
 
-  if (!mailService.isConfigured()) {
-    mailService.warnNotConfigured();
+  if (!isEmailConfigured()) {
+    warnEmailNotConfigured();
     return;
   }
-  const { subject, text } = resetEmail(lang, { name: user.name, link, minutes: PASSWORD_RESET_MINUTES });
-  await mailService.sendMail({ to: email, subject, text });
+  const resetEmail = buildResetEmail(language, { name: user.name, link, minutes: PASSWORD_RESET_MINUTES });
+  await sendEmail({ to: email, subject: resetEmail.subject, text: resetEmail.text });
 }
 
-async function requestPasswordReset(body, { ip } = {}) {
-  const { valid, errors, value } = validateForgotPassword(body);
-  if (!valid) throw new HttpError(400, 'Validation failed', errors, { code: ERROR_CODES.VALIDATION_FAILED });
-
-  limit(limiters.forgotByIp, `ip:${ip}`);
-  limit(limiters.forgotByEmail, `email:${value.email}`);
-
-  // Not awaited: an existing account must not answer more slowly than an unknown one.
-  issueResetToken(value.email, value.lang).catch((err) =>
-    console.error('Password reset email could not be sent:', err.message)
-  );
+// Step 1: "forgot password". `input` is already validated: { email, lang }.
+export function requestPasswordReset(input) {
+  // Not awaited on purpose: if we waited, an existing account would answer more slowly than
+  // an unknown one, which would give away which emails are registered.
+  createAndSendResetLink(input.email, input.lang).catch((error) => {
+    console.error('Password reset email could not be sent:', error.message);
+  });
 
   return { message: 'If an account exists for that email, a reset link has been sent.' };
 }
 
-async function resetPassword(body, { ip, tracker = defaultTracker } = {}) {
-  limit(limiters.resetByIp, `ip:${ip}`);
-
-  const { valid, errors, value } = validateResetPassword(body);
-  if (errors.token) throw invalidLink();
-  if (!valid) throw new HttpError(400, 'Validation failed', errors, { code: ERROR_CODES.VALIDATION_FAILED });
-
-  const conn = await pool.getConnection();
-  let userId;
-  try {
-    await conn.beginTransaction();
-    const row = await passwordResetModel.findByHashForUpdate(hashToken(value.token), conn);
-    if (tokenState(row) !== 'valid') throw invalidLink();
-
-    userId = row.user_id;
-    const passwordHash = await bcrypt.hash(value.password, BCRYPT_ROUNDS);
-    await userModel.updatePasswordHash(userId, passwordHash, conn);
-    // Uses this token and retires any other unused one the user holds.
-    await passwordResetModel.invalidateUnusedForUser(userId, conn);
-    await conn.commit();
-  } catch (err) {
-    await conn.rollback();
-    throw err;
-  } finally {
-    conn.release();
-  }
-
-  const user = await userModel.findById(userId);
-  if (user) tracker.reset(user.email);
-  return { message: 'Password updated. Sign in with your new password.' };
+// The error for a link that is wrong, already used or expired
+function invalidLinkError() {
+  return createError(400, 'This reset link is invalid or has expired', { code: ERROR_CODES.RESET_TOKEN_INVALID });
 }
 
-module.exports = { requestPasswordReset, resetPassword, issueResetToken, resetEmail };
+// Step 2: "reset password". `body` is { token, password } from the reset page.
+// Returns the id of the user whose password changed (so their open chat can be closed too).
+export async function resetPassword(body) {
+  // A badly formed token is always reported as an invalid link
+  const tokenCheck = resetPasswordSchema.shape.token.safeParse(body?.token);
+  if (!tokenCheck.success) {
+    throw invalidLinkError();
+  }
+  const input = validate(resetPasswordSchema, body);
+
+  const userId = await runInTransaction(async (connection) => {
+    // Find the token's row and lock it, so the same link cannot be used twice at once
+    const [rows] = await connection.query(
+      `SELECT id, user_id, used_at, UNIX_TIMESTAMP(expires_at) * 1000 AS expires_ms
+       FROM password_resets WHERE token_hash = ? FOR UPDATE`,
+      [hashToken(input.token)]
+    );
+    const resetRow = rows[0];
+
+    // The link must exist, be unused and not be expired
+    const isValid = resetRow && !resetRow.used_at && Number(resetRow.expires_ms) > Date.now();
+    if (!isValid) {
+      throw invalidLinkError();
+    }
+
+    // Save the new password and the time it changed (this signs out every old session)
+    const passwordHash = await bcrypt.hash(input.password, BCRYPT_ROUNDS);
+    await connection.query('UPDATE users SET password_hash = ?, password_changed_at = NOW() WHERE id = ?', [
+      passwordHash,
+      resetRow.user_id,
+    ]);
+
+    // Mark this link (and any other unused link of this user) as used
+    await connection.query(
+      'UPDATE password_resets SET used_at = NOW() WHERE user_id = ? AND used_at IS NULL',
+      [resetRow.user_id]
+    );
+    return resetRow.user_id;
+  });
+
+  // A successful reset also unlocks the account
+  const user = await findUserById(userId);
+  if (user) {
+    clearFailedLogins(user.email);
+  }
+  return userId;
+}
