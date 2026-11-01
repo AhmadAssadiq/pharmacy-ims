@@ -1,10 +1,15 @@
 """Demand forecasting for medication reorder alerts (FR 6, FR 6.1, FR 6.2).
 
 One model is trained per medication on its historical daily sales. The model
-is a scikit-learn LinearRegression over two kinds of features:
+is a scikit-learn LinearRegression over three kinds of features:
 
-* a linear time index (captures rising / falling demand), and
-* one-hot day-of-week indicators (captures weekly seasonality).
+* a linear time index (captures rising / falling demand),
+* one-hot day-of-week indicators (captures weekly seasonality), and
+* a yearly seasonal wave (GP2 addition): sine/cosine pairs of the date's
+  position in the year, which let the model learn how demand moves through the
+  months and seasons - antibiotics and cough syrup in winter, antihistamines
+  in spring. It is only used once a medication has a full year of history;
+  with less, a year's pattern cannot be told apart from the trend.
 
 The trained model predicts demand for each of the next N days; the cumulative
 predicted demand is subtracted from the current stock to find the first day on
@@ -12,6 +17,7 @@ which the quantity falls below the safe threshold.
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
@@ -23,6 +29,12 @@ from sklearn.metrics import mean_absolute_error
 # attempted (UC-3 alternative flow: insufficient data -> no alert).
 MIN_HISTORY_DAYS = 14
 HOLDOUT_DAYS = 7
+# A year of history before the yearly wave is added, and how many harmonics it
+# has: 3 sine/cosine pairs can follow a winter peak, a spring peak or both,
+# and scored best in the backtest (evaluate.py) against 2 and 4.
+MIN_SEASONAL_DAYS = 365
+YEARLY_HARMONICS = 3
+DAYS_PER_YEAR = 365.25
 
 
 def parse_date(value) -> date:
@@ -31,14 +43,22 @@ def parse_date(value) -> date:
     return datetime.strptime(str(value)[:10], "%Y-%m-%d").date()
 
 
-def features(day_indices: np.ndarray, start: date) -> np.ndarray:
-    """Builds the feature matrix: [day_index, dow_0 ... dow_6]."""
+def features(day_indices: np.ndarray, start: date, seasonal: bool = False) -> np.ndarray:
+    """Builds the feature matrix: [day_index, dow_0 ... dow_6], plus
+    [sin_1, cos_1 ... sin_k, cos_k] of the yearly wave when `seasonal`."""
     rows = []
     for idx in day_indices:
-        dow = (start + timedelta(days=int(idx))).weekday()
+        day = start + timedelta(days=int(idx))
         one_hot = [0] * 7
-        one_hot[dow] = 1
-        rows.append([float(idx)] + one_hot)
+        one_hot[day.weekday()] = 1
+        row = [float(idx)] + one_hot
+        if seasonal:
+            # Measured from a fixed calendar origin, so the same date always
+            # gets the same position in the year whatever the training start.
+            angle = 2 * math.pi * day.toordinal() / DAYS_PER_YEAR
+            for k in range(1, YEARLY_HARMONICS + 1):
+                row += [math.sin(k * angle), math.cos(k * angle)]
+        rows.append(row)
     return np.array(rows, dtype=float)
 
 
@@ -68,10 +88,15 @@ class TrainedModel:
     last_date: date
     n_days: int
     mae: float | None
+    seasonal: bool = False
 
 
-def train(sales: list[dict]) -> tuple[TrainedModel | None, str]:
-    """Trains a model for one medication. Returns (model, reason)."""
+def train(sales: list[dict], seasonal: bool | None = None) -> tuple[TrainedModel | None, str]:
+    """Trains a model for one medication. Returns (model, reason).
+
+    `seasonal` forces the yearly wave on or off; by default it is used when
+    there are at least MIN_SEASONAL_DAYS of history.
+    """
     aggregated = aggregate_daily(sales)
     if aggregated is None:
         return None, "no sales history"
@@ -80,8 +105,10 @@ def train(sales: list[dict]) -> tuple[TrainedModel | None, str]:
     if n_days < MIN_HISTORY_DAYS:
         return None, f"insufficient data: {n_days} day(s) of history, need {MIN_HISTORY_DAYS}"
 
+    if seasonal is None:
+        seasonal = n_days >= MIN_SEASONAL_DAYS
     idx = np.arange(n_days)
-    X = features(idx, start)
+    X = features(idx, start, seasonal)
 
     # Report accuracy on a short holdout when there is enough data, then refit on everything.
     mae = None
@@ -98,6 +125,7 @@ def train(sales: list[dict]) -> tuple[TrainedModel | None, str]:
         last_date=start + timedelta(days=n_days - 1),
         n_days=n_days,
         mae=mae,
+        seasonal=seasonal,
     )
     return trained, "trained"
 
@@ -106,7 +134,9 @@ def forecast_demand(trained: TrainedModel, as_of: date, horizon_days: int) -> li
     """Predicted units sold on each of the `horizon_days` days after `as_of`."""
     first_idx = (as_of - trained.start_date).days + 1
     idx = np.arange(first_idx, first_idx + horizon_days)
-    predicted = trained.model.predict(features(idx, trained.start_date))
+    # Models saved before the yearly wave existed have no `seasonal` attribute.
+    seasonal = getattr(trained, "seasonal", False)
+    predicted = trained.model.predict(features(idx, trained.start_date, seasonal))
     return [float(v) for v in np.clip(predicted, 0, None)]
 
 

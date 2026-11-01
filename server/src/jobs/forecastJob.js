@@ -6,6 +6,7 @@
 const cron = require('node-cron');
 const env = require('../config/env');
 const forecastService = require('../services/forecastService');
+const demoSalesService = require('../services/demoSalesService');
 
 const STARTUP_DELAY_MS = 5_000;
 let running = false;
@@ -14,6 +15,8 @@ async function runForecastSafely(trigger) {
   if (running) return; // never overlap two runs
   running = true;
   try {
+    const filled = await demoSalesService.topUp();
+    if (filled > 0) console.log(`[forecast:${trigger}] filled ${filled} missing demo sales day(s)`);
     const { summary } = await forecastService.runForecast();
     console.log(
       `[forecast:${trigger}] trained=${summary.trained} insufficient=${summary.insufficientData} ` +

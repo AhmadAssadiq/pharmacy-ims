@@ -19,6 +19,9 @@ build/
 # ML artifacts
 ml-service/models/*.joblib
 
+# Raw Kaggle download for data/prepare_demo_sales.py (licence listed as "Unknown")
+data/raw/
+
 # Editor / OS
 .vscode/
 .idea/

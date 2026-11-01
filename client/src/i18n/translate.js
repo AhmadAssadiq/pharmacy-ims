@@ -91,6 +91,13 @@ export function formatDate(value, locale) {
   return new Intl.DateTimeFormat(locale, { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' }).format(date);
 }
 
+/** Short month and year for monthly charts: "Sep 2026". Takes a date or "YYYY-MM". */
+export function formatMonthYear(value, locale) {
+  const date = toUtcDay(/^\d{4}-\d{2}$/.test(String(value)) ? `${value}-01` : value);
+  if (!date) return String(value);
+  return new Intl.DateTimeFormat(locale, { month: 'short', year: 'numeric', timeZone: 'UTC' }).format(date);
+}
+
 /** Short day and month for chart axes: "21 Sep". */
 export function formatDayMonth(value, locale) {
   const date = toUtcDay(value);

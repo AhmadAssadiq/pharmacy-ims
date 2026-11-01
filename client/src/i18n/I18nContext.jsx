@@ -10,6 +10,7 @@ import {
   formatDate,
   formatDateTime,
   formatDayMonth,
+  formatMonthYear,
   formatPrice,
 } from './translate';
 
@@ -105,6 +106,7 @@ export function I18nProvider({ children }) {
       te,
       formatDate: (v) => formatDate(v, locale),
       formatDayMonth: (v) => formatDayMonth(v, locale),
+      formatMonthYear: (v) => formatMonthYear(v, locale),
       formatDateTime: (v) => formatDateTime(v, locale),
       formatPrice: (v) => formatPrice(v, locale),
     }),

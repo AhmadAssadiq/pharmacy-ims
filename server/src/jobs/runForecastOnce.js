@@ -4,9 +4,14 @@
  */
 const pool = require('../config/db');
 const forecastService = require('../services/forecastService');
+const demoSalesService = require('../services/demoSalesService');
 
-forecastService
-  .runForecast()
+demoSalesService
+  .topUp()
+  .then((filled) => {
+    if (filled > 0) console.log(`Filled ${filled} missing demo sales day(s)`);
+    return forecastService.runForecast();
+  })
   .then(({ summary, predictions }) => {
     console.log('Summary:', summary);
     for (const p of predictions) {

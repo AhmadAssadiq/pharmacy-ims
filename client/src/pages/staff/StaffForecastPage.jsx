@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { fetchMedications } from '../../api/medications';
 import { fetchMedicationForecast } from '../../api/forecast';
 import DemandChart from '../../components/forecast/DemandChart';
+import MonthlyChart from '../../components/forecast/MonthlyChart';
 import StockProjectionChart from '../../components/forecast/StockProjectionChart';
 import { useI18n } from '../../i18n/I18nContext';
 import constants from '../../../../shared/constants.json';
@@ -117,6 +118,12 @@ export default function StaffForecastPage() {
                   <strong className="muted">{t('forecast.notEnoughData')}</strong>
                 )}
               </div>
+              {forecast.trained && (
+                <div>
+                  <span className="field__label">{t('forecast.model')}</span>
+                  <strong>{t(forecast.seasonal ? 'forecast.modelSeasonal' : 'forecast.modelBasic')}</strong>
+                </div>
+              )}
               {forecast.mae !== null && (
                 <div>
                   <span className="field__label">{t('forecast.mae')}</span>
@@ -141,6 +148,14 @@ export default function StaffForecastPage() {
                 <p className="muted">{t('forecast.dailyNote', { count: forecast.forecast.length })}</p>
                 <DemandChart history={forecast.history} forecast={forecast.forecast} />
               </div>
+
+              {forecast.seasonal && (
+                <div className="card">
+                  <h2>{t('forecast.monthly')}</h2>
+                  <p className="muted">{t('forecast.monthlyNote')}</p>
+                  <MonthlyChart history={forecast.history} outlook={forecast.outlook} asOfDate={forecast.as_of_date} />
+                </div>
+              )}
 
               <div className="card">
                 <h2>{t('forecast.projected')}</h2>

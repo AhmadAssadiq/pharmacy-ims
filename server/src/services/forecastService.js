@@ -123,12 +123,27 @@ function addDays(date, days) {
   return shifted.toISOString().slice(0, 10);
 }
 
+// The monthly chart's outlook runs to the end of the third month after this one.
+const OUTLOOK_MONTHS = 3;
+
+/** Days from the day after `date` to the last day of the OUTLOOK_MONTHS-th month after it. */
+function outlookDays(date) {
+  const [year, month] = date.split('-').map(Number);
+  const lastDay = Date.UTC(year, month + OUTLOOK_MONTHS, 0); // day 0 = last day of the month before
+  return Math.round((lastDay - Date.parse(`${date}T00:00:00Z`)) / 86_400_000);
+}
+
 /**
  * Sales history and forecast for one medication, for the staff forecast charts.
  *
  * This retrains on the way in rather than reusing whatever the scheduled job
  * last wrote to disk, so the chart always reflects sales recorded since the last
  * run - including one made seconds ago.
+ *
+ * When the model has the yearly seasonal wave (a year or more of history), an
+ * `outlook` of daily predicted demand to the end of the third month ahead is
+ * included for the monthly chart (GP2 addition). Only the 7-day forecast feeds
+ * the reorder decision.
  */
 async function getMedicationForecast(medicationId) {
   const medication = await medicationModel.findById(medicationId);
@@ -155,6 +170,19 @@ async function getMedicationForecast(medicationId) {
   });
   const prediction = predictions[0] || { status: 'insufficient_data' };
 
+  let outlook = [];
+  if (training.seasonal) {
+    const { results } = await callMl('/predict', {
+      as_of_date: asOfDate,
+      horizon_days: outlookDays(asOfDate),
+      medications: [{ medication_id: medicationId, current_quantity: 0, threshold: 0 }],
+    });
+    outlook = (results[0]?.daily_demand || []).map((demand, index) => ({
+      date: addDays(asOfDate, index + 1),
+      predicted_demand: Math.round(demand * 100) / 100,
+    }));
+  }
+
   // Walk the predicted demand forward to show how the stock is expected to run
   // down - this is what the reorder alert is derived from.
   let remaining = Number(medication.quantity);
@@ -177,6 +205,8 @@ async function getMedicationForecast(medicationId) {
     as_of_date: asOfDate,
     history,
     forecast,
+    outlook,
+    seasonal: Boolean(training.seasonal),
     status: prediction.status,
     days_until_threshold: prediction.days_until_threshold ?? null,
     predicted_date: prediction.predicted_date ?? null,
@@ -197,4 +227,4 @@ async function dismissAlert(id) {
   return reorderAlertModel.findById(id);
 }
 
-module.exports = { runForecast, getMedicationForecast, listActiveAlerts, dismissAlert };
+module.exports = { runForecast, getMedicationForecast, listActiveAlerts, dismissAlert, outlookDays };

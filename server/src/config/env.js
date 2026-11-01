@@ -18,6 +18,9 @@ const env = {
   clientOrigin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
   mlServiceUrl: process.env.ML_SERVICE_URL || 'http://127.0.0.1:5001',
   forecastCron: process.env.FORECAST_CRON || '0 * * * *',
+  // Fill days missing from the demo sales history before each forecast run
+  // (services/demoSalesService.js). On unless set to "false".
+  demoSalesTopUp: process.env.DEMO_SALES_TOPUP !== 'false',
   nodeEnv: process.env.NODE_ENV || 'development',
   // Prints password reset links to the server console. There is no mail
   // service yet; this is for development only and is ignored in production.

@@ -21,6 +21,15 @@ async function findByMedicationId(medicationId, conn = pool) {
   return rows;
 }
 
+/** The distinct days (YYYY-MM-DD, oldest first) on which a medication has any sales row. */
+async function findSaleDates(medicationId, conn = pool) {
+  const [rows] = await conn.execute(
+    'SELECT DISTINCT date FROM sales_history WHERE medication_id = ? ORDER BY date',
+    [medicationId]
+  );
+  return rows.map((row) => String(row.date).slice(0, 10));
+}
+
 /** Most recent sales with medication names, for the staff dispensing page. */
 async function findRecent(limit = 20, conn = pool) {
   const [rows] = await conn.query(
@@ -62,4 +71,4 @@ async function deleteBefore(date, conn = pool) {
   return result.affectedRows;
 }
 
-module.exports = { findAll, findByMedicationId, findRecent, insertSale, bulkInsert, deleteBefore };
+module.exports = { findAll, findByMedicationId, findSaleDates, findRecent, insertSale, bulkInsert, deleteBefore };

@@ -58,6 +58,7 @@ def train():
                 "reason": reason,
                 "history_days": trained.n_days,
                 "mae": trained.mae,
+                "seasonal": trained.seasonal,
             }
         )
     return jsonify({"results": results})

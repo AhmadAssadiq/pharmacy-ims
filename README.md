@@ -17,6 +17,7 @@ reset, account deletion, dark mode and a full Arabic (right-to-left) interface.
   /server       -> Node.js REST API + WebSocket chat server  - Express, mysql2, ws, node-cron
   /ml-service   -> Python forecasting microservice           - Flask, scikit-learn
   /shared       -> constants shared by client and server (thresholds, roles, statuses)
+  /data         -> the demo pharmacy's sales history (demo-sales.json) and the script that builds it
 ```
 
 The server follows a routes -> controllers -> services -> models layering (NFR 5.1):
@@ -24,7 +25,8 @@ The server follows a routes -> controllers -> services -> models layering (NFR 5
 ```
 server/src
   config/        environment + MySQL pool
-  db/            schema.sql, migrate.js (+ upgrades.js: in-place upgrades), seed.js
+  db/            schema.sql, migrate.js (+ upgrades.js: in-place upgrades), seed.js,
+                 demoCatalog.js + demoSales.js (the demo catalog and its sales history)
   models/        one data-access module per table (parameterized queries only)
   services/      business logic (auth, medications, chat, forecast, availability)
   controllers/   HTTP handlers
@@ -92,6 +94,7 @@ Edit `server/.env` and set at least `DB_PASSWORD` (if your MySQL root has one) a
 | Variable | Default | Purpose |
 |---|---|---|
 | `PORT`, `DB_*`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `CLIENT_ORIGIN`, `ML_SERVICE_URL`, `FORECAST_CRON` | see `.env.example` | as before |
+| `DEMO_SALES_TOPUP` | `true` | before each forecast run, fill days missing from the demo sales history up to yesterday - see "Demo sales data" |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` | empty, `587` | outgoing email for password reset links; leave `SMTP_HOST` empty and no email is sent - see "Password reset" |
 | `SMTP_SECURE` | `true` on port 465 | TLS from the first byte (465); otherwise STARTTLS is used (587) |
 | `SMTP_REQUIRE_TLS` | `true` | `false` only for a local mail catcher such as Mailpit; never sends a password without TLS otherwise |
@@ -113,7 +116,14 @@ npm run db:seed
 `db:migrate` creates the `pharmacy_ims` database with nine tables (`users`, `medications`,
 `medication_batches`, `chat_sessions`, `chat_messages`, `sales_history`, `reorder_alerts`,
 `preorders`, `password_resets`). `db:seed` creates the demo accounts, a starter catalog held as
-dated stock lots and 90 days of synthetic sales history.
+dated stock lots, and daily sales history from 1 January 2022 up to yesterday (see "Demo sales
+data" below). Stock levels and reorder thresholds are sized from each medication's recent demand,
+so the same demo situations appear whenever you seed.
+
+The seasonal forecasting change (GP2) replaced the demo catalog: Omeprazole and Salbutamol made
+way for Cough Syrup, Vitamin C and Multivitamin, the medicines the sales data covers. `db:seed`
+only adds medications to an empty catalog, so **a database seeded before that change needs one
+`npm run db:reset`** to get the new catalog and stock (this deletes everything in it).
 
 `schema.sql` only issues `CREATE TABLE IF NOT EXISTS`, so on its own it cannot change a table that
 already exists. `db:migrate` therefore also runs `server/src/db/upgrades.js`, whose steps check
@@ -180,7 +190,9 @@ and a Contact link.
 
 | Command | What it does |
 |---|---|
-| `npm test` | Runs the unit tests (101): validation, lockout, roles, stock flags, FEFO, preorders, reset tokens, rate limiter, SMTP, presence, image sniffing, account deletion, the i18n dictionaries and the translator |
+| `npm test` | Runs the unit tests (110): validation, lockout, roles, stock flags, FEFO, preorders, reset tokens, rate limiter, SMTP, presence, image sniffing, account deletion, demo sales, the i18n dictionaries and the translator |
+| `venv\Scripts\python -m unittest` (in `ml-service`) | Runs the forecaster's unit tests (8) |
+| `venv\Scripts\python evaluate.py` (in `ml-service`) | Backtests the forecast before and after the seasonal wave - see "Demo sales data" |
 | `npm run db:reset` | Drops, migrates and re-seeds the database (needed after a schema change) |
 | `npm run forecast -w server` | Runs the ML forecast / reorder-alert check once and prints the result |
 | `npm run build -w client` | Production build of the React app into `client/dist` |
@@ -236,9 +248,12 @@ Thresholds live in `shared/constants.json`:
 1. The backend job (hourly by default, `FORECAST_CRON`, and once 5 s after start-up) sends each
    medication's `sales_history` rows to the ML service `POST /train`.
 2. The service aggregates sales per day and fits a scikit-learn `LinearRegression` per
-   medication on a time index plus day-of-week indicators. Medications with fewer than 14 days
-   of history are skipped (no model, no alert - UC-3 alternative flow). Models are persisted
-   under `ml-service/models/`.
+   medication on a time index plus day-of-week indicators. Once a medication has a year of
+   history, a yearly seasonal wave is added too (three sine/cosine pairs of the date's position
+   in the year), so the model learns how demand moves through the months and seasons. With less
+   than a year a season cannot be told apart from the trend, so it is left out. Medications with
+   fewer than 14 days of history are skipped (no model, no alert - UC-3 alternative flow).
+   Models are persisted under `ml-service/models/`.
 3. The backend calls `POST /predict` with each medication's current quantity and the safe
    threshold. The service forecasts the next 7 days of demand and reports the first day the
    stock is predicted to fall below the threshold.
@@ -247,6 +262,54 @@ Thresholds live in `shared/constants.json`:
    dismissed are not re-raised while the prediction is unchanged.
 5. The staff dashboard shows active alerts with the medication name and days until the
    threshold; staff can dismiss them.
+
+The **Forecast** page retrains the selected medication on request. It shows the last 30 days and
+the 7-day forecast, which model was used, and, for seasonal models, a monthly chart of the last two
+years with the predicted demand for the next three months.
+
+### Demo sales data
+
+The demo pharmacy's sales come from the Kaggle
+[Global Pharmacy Sales Dataset (2020-2025)](https://www.kaggle.com/datasets/annemark/global-pharmacy-sales-dataset-20202025),
+a synthetic daily dataset of units sold per medicine, region, country and age group.
+`data/prepare_demo_sales.py` turns it into `data/demo-sales.json`; it prints each step:
+
+1. Drop exact duplicate rows (2,630).
+2. Drop 2020-2021. The dataset flags them as COVID years and their demand runs about 60% above
+   normal.
+3. Cap outliers above Q3 + 3 x IQR per medicine (1,506 rows).
+4. Sum each medicine's rows per day and keep only its day-to-day variation. In the source every
+   medicine follows the same seasonal curve, peaking in March in both hemispheres, so that curve
+   is removed.
+5. Rebuild each medicine's demand for one community pharmacy in Amman: its own volume, yearly
+   growth and seasons (antibiotics and cough syrup peak in winter, Cetirizine in the spring
+   pollen season, Metformin and Amlodipine barely move), and the Jordanian week (Friday is
+   quietest). Each day's units are drawn around that expectation (Poisson, fixed seed).
+6. Carry the series on to the end of 2029. Later years reuse the 2022-2025 day-to-day variation
+   while volume, growth and seasons continue, so the demo always has history up to yesterday.
+
+The file is read by calendar date. The seed writes 2022 to yesterday, and before each forecast run
+the server fills any days missing since the last seed (`services/demoSalesService.js`), so a demo
+weeks later needs no re-seed. Days that already have sales, including real ones, are never
+touched. Set `DEMO_SALES_TOPUP=false` for a real pharmacy.
+
+The raw CSV is not committed: its licence is listed as "Unknown". To rebuild the JSON, download it
+into `data/raw/` and run
+`py -3.12 -I data/prepare_demo_sales.py data/raw/global_pharmacy_sales_2020_2025_daily_dataset.csv`.
+
+`ml-service/evaluate.py` replays 2025 week by week. At each week it trains on the sales before it,
+first the previous way (trend and weekday on the last 90 days), then with the seasonal wave on
+all history, and compares both with what was actually sold:
+
+| Horizon | Error in total units, before | After |
+|---|---|---|
+| next 7 days (the reorder alert) | 17.6% | 14.8% |
+| next 28 days | 15.0% | 7.6% |
+
+The biggest gains are the most seasonal medicines: Cough Syrup's 28-day error drops from 27.2% to
+9.0%, Cetirizine's from 18.1% to 7.8%. The daily error improves less (2.14 to 2.01 units/day),
+because a single day's sales at a small pharmacy are largely random. The total over several days
+is what a reorder decision depends on.
 
 ## API summary
 
