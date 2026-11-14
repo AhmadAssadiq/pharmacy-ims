@@ -1240,3 +1240,8 @@ input[aria-invalid='true'], select[aria-invalid='true'] { border-color: var(--ne
 .alternatives { display: block; margin-top: 6px; font-size: var(--fs-small); font-weight: 400; }
 .alternatives__title { font-weight: 500; }
 .alternatives__list { margin: 4px 0 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+
+/* The interaction check (components/InteractionNotice.jsx) */
+.interactions { display: grid; gap: 6px; margin: 12px 0; }
+.interactions__list { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.interactions__note { font-size: var(--fs-small); }

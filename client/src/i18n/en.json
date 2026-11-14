@@ -234,7 +234,9 @@
     "dispensed": "Dispensed {units} across {medications}, total {total}. Stock has been reduced.",
     "basketUnits_one": "<num>{count}</num> unit",
     "basketUnits_other": "<num>{count}</num> units",
-    "errorOutOfStock": "{name} is out of stock."
+    "errorOutOfStock": "{name} is out of stock.",
+    "prescriptionChecked": "I have checked the prescription for the prescription-only medication in this sale.",
+    "prescriptionRequired": "Tick the box to confirm you have checked the prescription."
   },
   "forecast": {
     "title": "Demand forecast",
@@ -553,5 +555,21 @@
     "none": "Nothing similar is in stock right now.",
     "same_ingredient": "same active ingredient",
     "same_category": "similar use: ask the pharmacist first"
+  },
+  "interactions": {
+    "checking": "Checking for interactions...",
+    "checkFailed": "The interaction check could not be done. Check these medications yourself.",
+    "none_one": "No known interactions for this medication.",
+    "none_other": "No known interactions between these {count} medications.",
+    "listNote": "Checked against the pharmacy's list of known interactions.",
+    "found_one": "{count} possible interaction found",
+    "found_other": "{count} possible interactions found",
+    "sameIngredient": "Both contain {ingredient}. Taking them together can mean a double dose.",
+    "decideNote": "This is a warning, not a block. The pharmacist decides.",
+    "severity": {
+      "major": "Major",
+      "moderate": "Moderate",
+      "minor": "Minor"
+    }
   }
 }

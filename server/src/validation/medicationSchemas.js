@@ -59,3 +59,11 @@ export const batchSchema = z.object(batchFields);
 
 // Adding a new medication: catalogue fields plus its first stock lot
 export const newMedicationSchema = z.object({ ...catalogFields, ...batchFields });
+
+// The interaction check (GP2 addition): a list of 1 to 20 medication ids
+export const interactionCheckSchema = z.object({
+  medication_ids: z
+    .array(z.coerce.number().int().min(1), { error: 'Send a list of medication ids' })
+    .min(1, 'Send at least one medication')
+    .max(20, 'At most 20 medications can be checked at once'),
+});

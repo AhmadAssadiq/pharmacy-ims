@@ -10,6 +10,7 @@ import salesRoutes from './routes/sales.js';
 import preorderRoutes from './routes/preorders.js';
 import chatRoutes from './routes/chat.js';
 import availabilityRoutes from './routes/availability.js';
+import interactionRoutes from './routes/interactions.js';
 import { forecastRouter, alertsRouter } from './routes/forecast.js';
 
 export const app = express();
@@ -32,6 +33,7 @@ app.use('/api/sales', salesRoutes);
 app.use('/api/preorders', preorderRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/availability', availabilityRoutes);
+app.use('/api/interactions', interactionRoutes);
 app.use('/api/forecast', forecastRouter);
 app.use('/api/alerts', alertsRouter);
 

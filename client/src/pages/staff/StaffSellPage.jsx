@@ -7,6 +7,7 @@ import { fetchMedications } from '../../api/medications';
 import { fetchRecentSales, previewSale, recordSale } from '../../api/sales';
 import AlternativesList from '../../components/AlternativesList';
 import ConfirmDialog from '../../components/ConfirmDialog';
+import InteractionNotice from '../../components/InteractionNotice';
 import StyledText from '../../components/StyledText';
 import { useI18n } from '../../i18n/useI18n';
 import constants from '../../../../shared/constants.json';
@@ -27,6 +28,9 @@ export default function StaffSellPage() {
   const [fieldErrors, setFieldErrors] = useState({});
   const [notice, setNotice] = useState(null);
   const [confirming, setConfirming] = useState(false);
+  // In the confirm dialog: the "I have checked the prescription" tick box and its error
+  const [prescriptionChecked, setPrescriptionChecked] = useState(false);
+  const [dialogError, setDialogError] = useState(null);
   const errorRef = useRef(null);
 
   // Loads the medications (for the drop-down) and the recent sales
@@ -115,6 +119,7 @@ export default function StaffSellPage() {
         medication_id: selectedMedication.id,
         medication_name: selectedMedication.name,
         unit_price: Number(selectedMedication.unit_price),
+        requires_prescription: selectedMedication.requires_prescription,
         quantity: newQuantity,
         allocations: preview.allocations,
       };
@@ -138,8 +143,27 @@ export default function StaffSellPage() {
     setBasket(basket.filter((line) => line.medication_id !== id));
   }
 
+  // The medication ids in the basket (for the interaction check)
+  const basketMedicationIds = basket.map((line) => line.medication_id);
+
+  // True when the basket holds a prescription-only medication
+  const hasPrescriptionLine = basket.some((line) => line.requires_prescription);
+
+  // Opens the "confirm this sale" dialog with the prescription box not ticked yet
+  function openConfirmDialog() {
+    setPrescriptionChecked(false);
+    setDialogError(null);
+    setConfirming(true);
+  }
+
   // Sells the whole basket (after the staff member confirmed in the dialog)
   async function handleConfirmSale() {
+    // A prescription-only medication: the box must be ticked first (the dialog stays open)
+    if (hasPrescriptionLine && !prescriptionChecked) {
+      setDialogError(t('sell.prescriptionRequired'));
+      return;
+    }
+
     setError(null);
     setFieldErrors({});
     setNotice(null);
@@ -323,13 +347,16 @@ export default function StaffSellPage() {
               </table>
             </div>
 
+            {/* Two or more medications: check them against each other (it only warns) */}
+            <InteractionNotice medicationIds={basketMedicationIds} />
+
             <div className="sale-total">
               <span>{t('sell.summary', { medications: medicationCountText, units: t('common.units', { count: totalQuantity }) })}</span>
               <span className="sale-total__value">{totalText}</span>
             </div>
 
             <div className="form-actions">
-              <button type="button" className="btn btn--commit" onClick={() => setConfirming(true)} disabled={saving}>
+              <button type="button" className="btn btn--commit" onClick={openConfirmDialog} disabled={saving}>
                 {t('sell.review')}
               </button>
               <button type="button" className="btn" onClick={() => setBasket([])} disabled={saving}>
@@ -406,6 +433,25 @@ export default function StaffSellPage() {
           </span>
           <span className="sale-total__value">{totalText}</span>
         </div>
+
+        {/* The same interaction check again, right before the sale is confirmed */}
+        <InteractionNotice medicationIds={basketMedicationIds} />
+
+        {/* A prescription-only medication: staff tick that they checked the prescription */}
+        {hasPrescriptionLine && (
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={prescriptionChecked}
+              onChange={(event) => {
+                setPrescriptionChecked(event.target.checked);
+                setDialogError(null);
+              }}
+            />
+            <span>{t('sell.prescriptionChecked')}</span>
+          </label>
+        )}
+        {dialogError && <div className="alert alert--error" role="alert">{dialogError}</div>}
       </ConfirmDialog>
     </>
   );
