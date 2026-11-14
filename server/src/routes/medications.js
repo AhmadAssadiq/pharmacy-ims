@@ -53,10 +53,23 @@ router.put('/:id', async (req, res) => {
   res.json({ medication });
 });
 
-// DELETE /api/medications/3 - delete a medication (its lots and sales history go with it)
+// DELETE /api/medications/3 - delete a medication that was added by mistake.
+// Refused (409) when it has sales or orders: discontinue it instead.
 router.delete('/:id', async (req, res) => {
   await medicationService.deleteMedication(parseId(req.params.id, 'medication'));
   res.status(204).end();
+});
+
+// POST /api/medications/3/discontinue - stop selling a medication, keeping its history
+router.post('/:id/discontinue', async (req, res) => {
+  const medication = await medicationService.discontinueMedication(parseId(req.params.id, 'medication'));
+  res.json({ medication });
+});
+
+// POST /api/medications/3/restore - sell a discontinued medication again
+router.post('/:id/restore', async (req, res) => {
+  const medication = await medicationService.restoreMedication(parseId(req.params.id, 'medication'));
+  res.json({ medication });
 });
 
 // GET /api/medications/3/batches - the stock lots of a medication

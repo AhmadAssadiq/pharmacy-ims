@@ -15,7 +15,7 @@ import { db } from '../db.js';
 import { config } from '../config.js';
 import { ERROR_CODES, FORECAST_HORIZON_DAYS } from '../constants.js';
 import { todayAsText, addDaysToDate } from '../utils/dates.js';
-import { getAllMedications, findMedicationById } from './medicationService.js';
+import { getActiveMedications, findMedicationById } from './medicationService.js';
 import { getAllSalesHistory, getSalesHistoryOfMedication } from './salesService.js';
 
 // Sends `body` to the ML service at `path` and returns its JSON answer.
@@ -90,7 +90,8 @@ export async function dismissAlert(id) {
 // Trains every medication's model, predicts the next 7 days and updates reorder_alerts.
 // Returns { summary, trainResults, predictions }.
 export async function runForecast() {
-  const medications = await getAllMedications();
+  // Discontinued medications are not forecast: nobody will reorder them
+  const medications = await getActiveMedications();
   const sales = await getAllSalesHistory();
 
   // Group the sales rows by medication: { medicationId: [{ date, quantity_sold }, ...] }

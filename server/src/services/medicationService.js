@@ -62,9 +62,17 @@ export async function findMedicationById(id, connection = db) {
 }
 
 // Every medication, A to Z, with its stock totals and warning flags.
+// This includes discontinued medications (the inventory page lists them separately).
 export async function getAllMedications() {
   const [rows] = await db.query(`${SELECT_MEDICATIONS_WITH_STOCK} GROUP BY m.id ORDER BY m.name ASC`);
   return rows.map((row) => addStockFlags(fixNumberColumns(row)));
+}
+
+// The medications the pharmacy still sells (everything except the discontinued ones).
+// Used for patients, the forecast and anything else that is about selling.
+export async function getActiveMedications() {
+  const medications = await getAllMedications();
+  return medications.filter((medication) => !medication.is_discontinued);
 }
 
 // One medication with its warning flags, or a 404 error.
@@ -129,18 +137,47 @@ export async function updateMedication(id, input) {
   return getMedication(id);
 }
 
-// Deletes a medication. Its lots, sales history, alerts and preorders go with it (ON DELETE CASCADE).
+// Stops selling a medication without losing anything (GP2 addition).
+// A discontinued medication disappears from the patient list, the Dispense page and the
+// forecast, but its lots, sales history and old orders are all kept. Its open reorder
+// alerts are removed, because nobody will reorder it.
+export async function discontinueMedication(id) {
+  await getMedication(id); // 404 if it does not exist
+  await db.query('UPDATE medications SET is_discontinued = 1 WHERE id = ?', [id]);
+  await db.query(`DELETE FROM reorder_alerts WHERE medication_id = ? AND status = 'active'`, [id]);
+  return getMedication(id);
+}
+
+// Starts selling a discontinued medication again.
+export async function restoreMedication(id) {
+  await getMedication(id); // 404 if it does not exist
+  await db.query('UPDATE medications SET is_discontinued = 0 WHERE id = ?', [id]);
+  return getMedication(id);
+}
+
+// Deletes a medication for good. This is only for a medication that was added by mistake:
+// one that has ever been sold or ordered is refused (409), because deleting it would also
+// delete its sales history, which the forecast and the pharmacy's records need.
+// Such a medication can be discontinued instead.
 export async function deleteMedication(id) {
-  const [result] = await db.query('DELETE FROM medications WHERE id = ?', [id]);
-  if (result.affectedRows === 0) {
-    throw medicationNotFound();
+  await getMedication(id); // 404 if it does not exist
+
+  const [sales] = await db.query('SELECT COUNT(*) AS total FROM sales_history WHERE medication_id = ?', [id]);
+  const [orders] = await db.query('SELECT COUNT(*) AS total FROM preorders WHERE medication_id = ?', [id]);
+  if (sales[0].total > 0 || orders[0].total > 0) {
+    throw createError(409, 'This medication has sales or orders. Discontinue it instead of deleting it.', {
+      code: ERROR_CODES.MEDICATION_HAS_HISTORY,
+    });
   }
+
+  // Its stock lots go with it (ON DELETE CASCADE)
+  await db.query('DELETE FROM medications WHERE id = ?', [id]);
 }
 
 // What patients may see (FR 7): only whether each medication is in stock.
-// Quantities, prices and suppliers are never included.
+// Quantities, prices and suppliers are never included. Discontinued medications are left out.
 export async function getAvailability() {
-  const medications = await getAllMedications();
+  const medications = await getActiveMedications();
   return medications.map((medication) => ({
     id: medication.id,
     name: medication.name,

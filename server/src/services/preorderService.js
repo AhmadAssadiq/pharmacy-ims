@@ -125,7 +125,8 @@ export async function changePreorderStatus(id, newStatus, delivery) {
         await dispenseLine(
           connection,
           { medication_id: preorder.medication_id, quantity: preorder.quantity },
-          todayAsText()
+          todayAsText(),
+          true // a request made before the medication was discontinued can still be collected
         );
       } catch (error) {
         // Not enough stock now is a conflict with the current stock (409), not a bad request

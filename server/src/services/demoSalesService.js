@@ -13,7 +13,7 @@ import { config } from '../config.js';
 import { todayAsText, addDaysToDate, listDatesBetween } from '../utils/dates.js';
 import { findDemoSeries } from '../db/demoCatalog.js';
 import { getDemoUnits } from '../db/demoSales.js';
-import { getAllMedications } from './medicationService.js';
+import { getActiveMedications } from './medicationService.js';
 import { getSaleDatesOfMedication, insertSalesHistoryRows } from './salesService.js';
 
 // The rows to add for one medication: one per day with no sales row, from its first
@@ -48,7 +48,8 @@ export async function fillMissingDemoSales() {
 
   const yesterday = addDaysToDate(todayAsText(), -1);
   let addedCount = 0;
-  for (const medication of await getAllMedications()) {
+  // Discontinued medications are no longer sold, so they get no new demo sales
+  for (const medication of await getActiveMedications()) {
     const series = findDemoSeries(medication.name);
     if (!series) {
       continue; // not a demo medication

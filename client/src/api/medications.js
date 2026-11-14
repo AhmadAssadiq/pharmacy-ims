@@ -12,3 +12,7 @@ export const createBatch = (medicationId, payload) =>
 export const updateBatch = (batchId, payload) =>
   request(`/medications/batches/${batchId}`, { method: 'PATCH', body: payload });
 export const deleteBatch = (batchId) => request(`/medications/batches/${batchId}`, { method: 'DELETE' });
+
+// Stop selling a medication but keep its history / start selling it again (GP2 addition)
+export const discontinueMedication = (id) => request(`/medications/${id}/discontinue`, { method: 'POST' });
+export const restoreMedication = (id) => request(`/medications/${id}/restore`, { method: 'POST' });

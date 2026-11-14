@@ -122,7 +122,15 @@
     "loadingInventory": "Loading inventory...",
     "updated": "Medication updated.",
     "confirmDelete": "Delete \"{name}\" from the catalog?",
-    "deleted": "{name} deleted from the catalog."
+    "deleted": "{name} deleted from the catalog.",
+    "chipDiscontinued": "Discontinued",
+    "discontinue": "Discontinue",
+    "restore": "Restore",
+    "discontinueTitle": "Discontinue \"{name}\"?",
+    "discontinueLead": "It will be hidden from patients and from the Dispense page. Its stock lots, sales history and past orders are kept, and you can restore it at any time.",
+    "deleteLead": "Deleting cannot be undone. It is only possible for a medication that was never sold or ordered.",
+    "discontinued": "{name} is discontinued. Its history is kept.",
+    "restored": "{name} is on sale again."
   },
   "table": {
     "regionLabel": "Medication stock, scrollable",
@@ -533,6 +541,8 @@
     "ATTACHMENT_TOO_LARGE": "Images can be at most {count} MB.",
     "ATTACHMENT_NOT_FOUND": "This image is no longer available.",
     "ACCOUNT_DELETE_FORBIDDEN": "Staff accounts cannot be deleted here.",
-    "PHONE_REQUIRED": "Add a phone number to your account first, so the pharmacy can call you when it is ready."
+    "PHONE_REQUIRED": "Add a phone number to your account first, so the pharmacy can call you when it is ready.",
+    "MEDICATION_HAS_HISTORY": "This medication has sales or orders, so it cannot be deleted. It stays discontinued instead.",
+    "MEDICATION_DISCONTINUED": "{name} is discontinued and cannot be sold."
   }
 }

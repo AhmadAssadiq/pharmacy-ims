@@ -8,7 +8,14 @@
 // After every change the list is loaded again, so the warning flags are never out of date.
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { deleteMedication, fetchMedications, updateMedication } from '../../api/medications';
+import {
+  deleteMedication,
+  discontinueMedication,
+  fetchMedications,
+  restoreMedication,
+  updateMedication,
+} from '../../api/medications';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import InventoryTable from '../../components/inventory/InventoryTable';
 import MedicationForm from '../../components/inventory/MedicationForm';
 import ReorderAlertPanel from '../../components/alerts/ReorderAlertPanel';
@@ -18,13 +25,15 @@ import constants from '../../../../shared/constants.json';
 
 const { NEAR_EXPIRY_DAYS } = constants;
 
-// The four filters. They use the flags the server already worked out, so the numbers at
+// The filters. They use the flags the server already worked out, so the numbers at
 // the top can never disagree with the table.
+// A discontinued medication is no longer sold, so it only appears under "Discontinued".
 const FILTERS = {
-  all: () => true,
-  low: (medication) => medication.is_low_stock,
-  expiring: (medication) => medication.is_near_expiry,
-  expired: (medication) => medication.expired_quantity > 0,
+  all: (medication) => !medication.is_discontinued,
+  low: (medication) => !medication.is_discontinued && medication.is_low_stock,
+  expiring: (medication) => !medication.is_discontinued && medication.is_near_expiry,
+  expired: (medication) => !medication.is_discontinued && medication.expired_quantity > 0,
+  discontinued: (medication) => medication.is_discontinued,
 };
 
 // The magnifying glass in the search box
@@ -47,6 +56,10 @@ export default function StaffInventoryPage() {
   const [saving, setSaving] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [filter, setFilter] = useState('all');
+  // The open "are you sure?" dialog: { medication, action } where action is
+  // 'discontinue' or 'delete', or null when no dialog is open
+  const [confirming, setConfirming] = useState(null);
+  const [busy, setBusy] = useState(false);
   const formRef = useRef(null);
 
   // Loads (or reloads) every medication with its stock and flags
@@ -85,19 +98,41 @@ export default function StaffInventoryPage() {
     }
   }
 
-  async function handleDelete(medication) {
-    if (!window.confirm(t('inventory.confirmDelete', { name: medication.name }))) {
-      return;
-    }
+  // Confirmed in the dialog: discontinue the medication, or delete it for good.
+  // Discontinuing keeps its history. Deleting is only for a medication added by mistake:
+  // the server refuses it when the medication has sales or orders.
+  async function handleConfirmed() {
+    const { medication, action } = confirming;
+    setBusy(true);
+    setError(null);
     try {
-      await deleteMedication(medication.id);
+      if (action === 'discontinue') {
+        await discontinueMedication(medication.id);
+      } else {
+        await deleteMedication(medication.id);
+      }
       if (editing && editing.id === medication.id) {
         setEditing(null);
       }
       await loadMedications();
-      showNotice(t('inventory.deleted', { name: medication.name }));
-    } catch (deleteError) {
-      setError(deleteError);
+      showNotice(t(action === 'discontinue' ? 'inventory.discontinued' : 'inventory.deleted', { name: medication.name }));
+    } catch (actionError) {
+      setError(actionError);
+    } finally {
+      setBusy(false);
+      setConfirming(null);
+    }
+  }
+
+  // Starts selling a discontinued medication again (nothing is lost, so no dialog)
+  async function handleRestore(medication) {
+    setError(null);
+    try {
+      await restoreMedication(medication.id);
+      await loadMedications();
+      showNotice(t('inventory.restored', { name: medication.name }));
+    } catch (restoreError) {
+      setError(restoreError);
     }
   }
 
@@ -111,10 +146,11 @@ export default function StaffInventoryPage() {
 
   // How many medications match each filter
   const counts = {
-    all: medications.length,
+    all: medications.filter(FILTERS.all).length,
     low: medications.filter(FILTERS.low).length,
     expiring: medications.filter(FILTERS.expiring).length,
     expired: medications.filter(FILTERS.expired).length,
+    discontinued: medications.filter(FILTERS.discontinued).length,
   };
 
   // The rows to show: the chosen filter, then the search text (name, category or supplier)
@@ -163,6 +199,7 @@ export default function StaffInventoryPage() {
     { key: 'low', label: t('inventory.chipLow') },
     { key: 'expiring', label: t('inventory.chipExpiring') },
     { key: 'expired', label: t('inventory.chipExpired') },
+    { key: 'discontinued', label: t('inventory.chipDiscontinued') },
   ];
 
   return (
@@ -241,7 +278,9 @@ export default function StaffInventoryPage() {
           <InventoryTable
             medications={visibleMedications}
             onEdit={startEditing}
-            onDelete={handleDelete}
+            onDiscontinue={(medication) => setConfirming({ medication, action: 'discontinue' })}
+            onRestore={handleRestore}
+            onDelete={(medication) => setConfirming({ medication, action: 'delete' })}
             onBatchesChanged={loadMedications}
           />
         )}
@@ -259,6 +298,23 @@ export default function StaffInventoryPage() {
           />
         )}
       </div>
+
+      {/* "Are you sure?" before discontinuing or deleting a medication */}
+      <ConfirmDialog
+        open={Boolean(confirming)}
+        title={
+          confirming
+            ? t(confirming.action === 'discontinue' ? 'inventory.discontinueTitle' : 'inventory.confirmDelete', {
+                name: confirming.medication.name,
+              })
+            : ''
+        }
+        lead={confirming ? t(confirming.action === 'discontinue' ? 'inventory.discontinueLead' : 'inventory.deleteLead') : ''}
+        confirmLabel={confirming ? t(confirming.action === 'discontinue' ? 'inventory.discontinue' : 'common.delete') : ''}
+        busy={busy}
+        onCancel={() => setConfirming(null)}
+        onConfirm={handleConfirmed}
+      />
     </>
   );
 }

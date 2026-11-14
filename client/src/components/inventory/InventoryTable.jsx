@@ -76,7 +76,9 @@ function SortIcon({ direction }) {
   );
 }
 
-export default function InventoryTable({ medications, onEdit, onDelete, onBatchesChanged }) {
+// onDiscontinue / onRestore / onDelete: a medication the pharmacy still sells can be
+// discontinued; a discontinued one can be restored, or deleted if it was added by mistake.
+export default function InventoryTable({ medications, onEdit, onDiscontinue, onRestore, onDelete, onBatchesChanged }) {
   const { t, formatDate, formatPrice } = useI18n();
   const [openLotsId, setOpenLotsId] = useState(null); // the medication whose lots are shown
   const [sortKey, setSortKey] = useState('name');
@@ -183,9 +185,20 @@ export default function InventoryTable({ medications, onEdit, onDelete, onBatche
                     <button type="button" className="btn btn--sm" onClick={() => onEdit(medication)}>
                       {t('common.edit')}
                     </button>{' '}
-                    <button type="button" className="btn btn--sm btn--danger" onClick={() => onDelete(medication)}>
-                      {t('common.delete')}
-                    </button>
+                    {medication.is_discontinued ? (
+                      <>
+                        <button type="button" className="btn btn--sm" onClick={() => onRestore(medication)}>
+                          {t('inventory.restore')}
+                        </button>{' '}
+                        <button type="button" className="btn btn--sm btn--danger" onClick={() => onDelete(medication)}>
+                          {t('common.delete')}
+                        </button>
+                      </>
+                    ) : (
+                      <button type="button" className="btn btn--sm btn--danger" onClick={() => onDiscontinue(medication)}>
+                        {t('inventory.discontinue')}
+                      </button>
+                    )}
                   </td>
                 </tr>
 

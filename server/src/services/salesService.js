@@ -21,11 +21,19 @@ function roundMoney(amount) {
 // `line` is { medication_id, quantity }. Also used when a preorder is collected (preorderService.js),
 // so both ways of handing out medication change stock in exactly the same way.
 // Returns what was sold, including which lots it came from.
-export async function dispenseLine(connection, line, dateText) {
-  // 1. The medication must exist
+// `allowDiscontinued` is true only when an order placed before the medication was
+// discontinued is collected; a new sale of a discontinued medication is refused.
+export async function dispenseLine(connection, line, dateText, allowDiscontinued = false) {
+  // 1. The medication must exist, and must still be sold
   const medication = await findMedicationById(line.medication_id, connection);
   if (!medication) {
     throw createError(404, `Medication ${line.medication_id} not found`, { code: ERROR_CODES.MEDICATION_NOT_FOUND });
+  }
+  if (medication.is_discontinued && !allowDiscontinued) {
+    throw createError(400, `${medication.name} is discontinued and cannot be sold`, {
+      code: ERROR_CODES.MEDICATION_DISCONTINUED,
+      params: { name: medication.name },
+    });
   }
 
   // 2. Read its lots that still hold stock and LOCK them (FOR UPDATE), so two sales at the
