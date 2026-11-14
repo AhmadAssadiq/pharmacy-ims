@@ -92,11 +92,14 @@ export default function StaffForecastPage() {
               <option value="">{t('forecast.selectMedication')}</option>
               {medications.map((medication) => (
                 <option key={medication.id} value={medication.id}>
-                  {t('forecast.option', {
-                    name: medication.name,
-                    quantity: medication.quantity,
-                    threshold: medication.low_stock_threshold,
-                  })}
+                  {/* A discontinued medication can still be chosen, to look at its history */}
+                  {medication.is_discontinued
+                    ? t('forecast.optionDiscontinued', { name: medication.name })
+                    : t('forecast.option', {
+                        name: medication.name,
+                        quantity: medication.quantity,
+                        threshold: medication.low_stock_threshold,
+                      })}
                 </option>
               ))}
             </select>

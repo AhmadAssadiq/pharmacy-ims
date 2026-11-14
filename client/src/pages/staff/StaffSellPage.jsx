@@ -32,7 +32,8 @@ export default function StaffSellPage() {
   async function loadData() {
     const medicationData = await fetchMedications();
     const salesData = await fetchRecentSales();
-    setMedications(medicationData.medications);
+    // Discontinued medications are no longer sold, so they are not offered here
+    setMedications(medicationData.medications.filter((medication) => !medication.is_discontinued));
     setRecentSales(salesData.sales);
   }
 

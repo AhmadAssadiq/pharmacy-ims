@@ -57,7 +57,7 @@ test('the download name has no folders or risky characters, and the real extensi
 
 test('the reset email has the link and how long it lasts, in English or Arabic', () => {
   const english = buildResetEmail('en', { name: 'Sara', link: 'http://x/reset?token=abc', minutes: 15 });
-  assert.match(english.subject, /Reset your Pharmacy IMS password/);
+  assert.match(english.subject, /Reset your DawaDesk password/);
   assert.match(english.text, /Hello Sara/);
   assert.match(english.text, /http:\/\/x\/reset\?token=abc/);
   assert.match(english.text, /expires in 15 minutes/);

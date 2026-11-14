@@ -169,7 +169,7 @@ export default function InventoryTable({ medications, onEdit, onDiscontinue, onR
                   <td data-col="status">
                     <span className="badges">
                       {medicationStatuses(medication, t).map((mark) => (
-                        <StatusMark key={mark.kind} kind={mark.kind} label={mark.label} />
+                        <StatusMark key={mark.kind} kind={mark.kind} label={mark.label} tone={mark.tone} />
                       ))}
                     </span>
                   </td>

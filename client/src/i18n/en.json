@@ -1,7 +1,7 @@
 {
   "app": {
-    "title": "Pharmacy Inventory Management System",
-    "brand": "Pharmacy IMS",
+    "title": "DawaDesk",
+    "brand": "DawaDesk",
     "skipToContent": "Skip to content"
   },
   "common": {
@@ -70,7 +70,7 @@
   "auth": {
     "email": "Email",
     "password": "Password",
-    "loginTitle": "Pharmacy IMS",
+    "loginTitle": "DawaDesk",
     "loginSubtitle": "Sign in to continue",
     "signIn": "Sign in",
     "signingIn": "Signing in...",
@@ -93,7 +93,8 @@
     "expiresIn_one": "Expires in {count} d",
     "expiresIn_other": "Expires in {count} d",
     "expiredAgo_one": "Expired {count} d ago",
-    "expiredAgo_other": "Expired {count} d ago"
+    "expiredAgo_other": "Expired {count} d ago",
+    "discontinued": "Discontinued"
   },
   "inventory": {
     "title": "Inventory",
@@ -263,7 +264,8 @@
     "monthly": "Monthly sales and seasonal outlook",
     "monthlyNote": "Units sold per month over the last two years, then the model's predicted demand for the next three months. The current month adds the prediction for its remaining days to the sales so far. Seasons are learnt once a medication has a year of history.",
     "projected": "Projected stock",
-    "projectedNote": "Current stock less the predicted demand each day, against this medication's reorder threshold."
+    "projectedNote": "Current stock less the predicted demand each day, against this medication's reorder threshold.",
+    "optionDiscontinued": "{name} — discontinued"
   },
   "chart": {
     "unitsSold": "Units sold",

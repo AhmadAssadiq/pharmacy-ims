@@ -1,13 +1,13 @@
 // Everything about the pharmacy itself in one place (GP2 addition). The About and Contact
 // pages read only from here.
 //
-// EVERY VALUE BELOW IS A PLACEHOLDER. Nothing about a real business has been filled in.
-// Replace each one with the pharmacy's real details before the site is shown to anyone.
+// Only the name (DawaDesk) is filled in. EVERY OTHER VALUE BELOW IS STILL A PLACEHOLDER:
+// replace each one with the pharmacy's real details before the site is shown to anyone.
 // Text that differs by language has an `en` and an `ar` value; numbers, the email and the
 // map search are the same in both.
 export const PHARMACY = {
   // The pharmacy's trading name.
-  name: { en: '[Pharmacy name]', ar: '[اسم الصيدلية]' },
+  name: { en: 'DawaDesk', ar: 'دواء ديسك' },
 
   // Street address as a patient would write it on an envelope.
   address: {
@@ -17,7 +17,7 @@ export const PHARMACY = {
 
   // What "Open in Maps" searches for: the address, or the pharmacy's name and
   // city. A plain link to a maps search - no embedded map, no third-party script.
-  mapsQuery: '[Pharmacy name], [city], Jordan',
+  mapsQuery: 'DawaDesk, [city], Jordan',
 
   // Shown as written; `phoneDial` is what the tel: link dials (digits and +).
   phone: '+962 [x xxx xxxx]',
@@ -32,7 +32,7 @@ export const PHARMACY = {
   // One row per group of days. Use null for `hours` on a day the pharmacy is closed.
   openingHours: [
     { days: { en: '[Saturday – Thursday]', ar: '[السبت – الخميس]' }, hours: '[09:00 – 22:00]' },
-    { days: { en: '[Friday]', ar: '[الجمعة]' }, hours: '[hours, or null if closed]' },
+    { days: { en: '[Friday]', ar: '[الجمعة]' }, hours: '[Friday hours]' },
   ],
 };
 

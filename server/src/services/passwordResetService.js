@@ -33,7 +33,7 @@ function hashToken(token) {
 export function buildResetEmail(language, { name, link, minutes }) {
   if (language === 'ar') {
     return {
-      subject: 'إعادة تعيين كلمة المرور - Pharmacy IMS',
+      subject: 'إعادة تعيين كلمة المرور - DawaDesk',
       text: [
         `مرحبًا ${name}،`,
         '',
@@ -47,7 +47,7 @@ export function buildResetEmail(language, { name, link, minutes }) {
     };
   }
   return {
-    subject: 'Reset your Pharmacy IMS password',
+    subject: 'Reset your DawaDesk password',
     text: [
       `Hello ${name},`,
       '',

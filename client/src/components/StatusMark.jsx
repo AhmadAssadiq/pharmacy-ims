@@ -61,6 +61,11 @@ export default function StatusMark({ kind, label, tone: toneOverride }) {
  * `t` is useI18n().t, so the labels come out in the active language.
  */
 export function medicationStatuses(med, t) {
+  // A discontinued medication is not sold any more, so its stock warnings do not matter
+  if (med.is_discontinued) {
+    return [{ kind: 'out', tone: 'muted', label: t('status.discontinued') }];
+  }
+
   const marks = [];
   if (med.is_out_of_stock) marks.push({ kind: 'out', label: t('status.out') });
   else if (med.is_low_stock) marks.push({ kind: 'low', label: t('status.low') });

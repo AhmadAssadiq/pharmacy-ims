@@ -25,7 +25,8 @@ export default function StaffStockPage() {
   // Loads (or reloads) the medication list for the drop-down
   async function loadMedications() {
     const data = await fetchMedications();
-    setMedications(data.medications);
+    // Discontinued medications are no longer sold, so no stock is received for them
+    setMedications(data.medications.filter((medication) => !medication.is_discontinued));
   }
 
   useEffect(() => {
