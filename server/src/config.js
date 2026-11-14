@@ -41,6 +41,15 @@ export const config = {
   // Folder where chat images are saved. Default: server/uploads
   uploadsDir: path.resolve(process.env.UPLOADS_DIR || path.join(import.meta.dirname, '../uploads')),
 
+  // Rafiq, the AI assistant (services/assistantService.js). The questions are answered by
+  // DeepSeek's API. If DEEPSEEK_API_KEY is empty, Rafiq answers "unavailable" and nothing
+  // else in the app is affected. The key must only ever be in .env, never in the code.
+  assistant: {
+    apiKey: process.env.DEEPSEEK_API_KEY || '',
+    model: process.env.DEEPSEEK_MODEL || 'deepseek-flash',
+    baseUrl: process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com',
+  },
+
   // Outgoing email for password reset links. If SMTP_HOST is empty, no email is sent.
   email: {
     host: process.env.SMTP_HOST || '',
