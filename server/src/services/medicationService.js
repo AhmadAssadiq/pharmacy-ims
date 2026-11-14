@@ -10,6 +10,7 @@ import createError from 'http-errors';
 import { db, runInTransaction } from '../db.js';
 import { ERROR_CODES } from '../constants.js';
 import { addStockFlags } from '../utils/stockFlags.js';
+import { addAlternatives } from '../utils/alternatives.js';
 import { todayAsText } from '../utils/dates.js';
 
 // The SELECT used for every medication read: catalogue columns plus the stock totals of its lots.
@@ -63,9 +64,11 @@ export async function findMedicationById(id, connection = db) {
 
 // Every medication, A to Z, with its stock totals and warning flags.
 // This includes discontinued medications (the inventory page lists them separately).
+// A medication that is out of stock also gets `alternatives`: what is in stock instead.
 export async function getAllMedications() {
   const [rows] = await db.query(`${SELECT_MEDICATIONS_WITH_STOCK} GROUP BY m.id ORDER BY m.name ASC`);
-  return rows.map((row) => addStockFlags(fixNumberColumns(row)));
+  const medications = rows.map((row) => addStockFlags(fixNumberColumns(row)));
+  return addAlternatives(medications);
 }
 
 // The medications the pharmacy still sells (everything except the discontinued ones).
@@ -182,7 +185,10 @@ export async function getAvailability() {
     id: medication.id,
     name: medication.name,
     category: medication.category,
+    active_ingredient: medication.active_ingredient,
     in_stock: medication.quantity > 0,
+    // What is in stock instead, when this one is not (names only)
+    alternatives: medication.alternatives,
   }));
 }
 

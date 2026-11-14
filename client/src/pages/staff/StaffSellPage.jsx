@@ -5,6 +5,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { fetchMedications } from '../../api/medications';
 import { fetchRecentSales, previewSale, recordSale } from '../../api/sales';
+import AlternativesList from '../../components/AlternativesList';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import StyledText from '../../components/StyledText';
 import { useI18n } from '../../i18n/useI18n';
@@ -73,6 +74,11 @@ export default function StaffSellPage() {
     // Check the form first
     if (!selectedMedication) {
       setFieldErrors({ medication_id: t('sell.errorSelectFirst') });
+      return;
+    }
+    // Out of stock: nothing to add (its alternatives are shown under the drop-down)
+    if (selectedMedication.quantity <= 0) {
+      setFieldErrors({ medication_id: t('sell.errorOutOfStock', { name: selectedMedication.name }) });
       return;
     }
     const requested = Number(quantity);
@@ -213,7 +219,7 @@ export default function StaffSellPage() {
               <select value={medicationId} onChange={(event) => setMedicationId(event.target.value)}>
                 <option value="">{t('sell.selectMedication')}</option>
                 {medications.map((medication) => (
-                  <option key={medication.id} value={medication.id} disabled={medication.quantity <= 0}>
+                  <option key={medication.id} value={medication.id}>
                     {t(medication.quantity <= 0 ? 'sell.optionUnavailable' : 'sell.option', {
                       name: medication.name,
                       quantity: medication.quantity,
@@ -222,6 +228,14 @@ export default function StaffSellPage() {
                 ))}
               </select>
               {fieldErrors.medication_id && <span className="field__error">{fieldErrors.medication_id}</span>}
+
+              {/* The chosen medication is out of stock: offer what is in stock instead */}
+              {selectedMedication && selectedMedication.quantity <= 0 && (
+                <AlternativesList
+                  alternatives={selectedMedication.alternatives}
+                  onChoose={(alternative) => setMedicationId(String(alternative.id))}
+                />
+              )}
             </label>
 
             <label className="field">

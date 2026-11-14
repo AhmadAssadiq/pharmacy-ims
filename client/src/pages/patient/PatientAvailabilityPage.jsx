@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { fetchAvailability } from '../../api/availability';
 import { cancelMyPreorder, createPreorder, fetchMyPreorders } from '../../api/preorders';
+import AlternativesList from '../../components/AlternativesList';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import { PreorderStatus } from '../../components/StatusMark';
 import StyledText from '../../components/StyledText';
@@ -210,6 +211,8 @@ export default function PatientAvailabilityPage() {
                 <strong><bdi>{medication.name}</bdi></strong>
                 <br />
                 <span className="muted" style={{ fontSize: '0.85rem' }}><bdi>{medication.category}</bdi></span>
+                {/* Out of stock: what is in stock instead */}
+                {!medication.in_stock && <AlternativesList alternatives={medication.alternatives} />}
               </span>
               <span className="list__actions">
                 <span className={`badge ${medication.in_stock ? 'badge--success' : 'badge--danger'}`}>

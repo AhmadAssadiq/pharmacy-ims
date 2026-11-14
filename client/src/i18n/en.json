@@ -196,7 +196,7 @@
     "finding": "Stock leaves the shelf when a sale is completed. Each line is drawn from the lot closest to expiry first, and the move cannot be undone.",
     "addFormLabel": "Add a medication to the sale",
     "addTitle": "Add to sale",
-    "addNote": "Out-of-stock medications cannot be selected.",
+    "addNote": "Choose an out-of-stock medication to see what is in stock instead.",
     "selectMedication": "Select a medication...",
     "option": "{name} ({quantity} in stock)",
     "optionUnavailable": "{name} ({quantity} in stock - unavailable)",
@@ -233,7 +233,8 @@
     "goBack": "Go back",
     "dispensed": "Dispensed {units} across {medications}, total {total}. Stock has been reduced.",
     "basketUnits_one": "<num>{count}</num> unit",
-    "basketUnits_other": "<num>{count}</num> units"
+    "basketUnits_other": "<num>{count}</num> units",
+    "errorOutOfStock": "{name} is out of stock."
   },
   "forecast": {
     "title": "Demand forecast",
@@ -546,5 +547,11 @@
     "PHONE_REQUIRED": "Add a phone number to your account first, so the pharmacy can call you when it is ready.",
     "MEDICATION_HAS_HISTORY": "This medication has sales or orders, so it cannot be deleted. It stays discontinued instead.",
     "MEDICATION_DISCONTINUED": "{name} is discontinued and cannot be sold."
+  },
+  "alternatives": {
+    "title": "In stock instead:",
+    "none": "Nothing similar is in stock right now.",
+    "same_ingredient": "same active ingredient",
+    "same_category": "similar use: ask the pharmacist first"
   }
 }

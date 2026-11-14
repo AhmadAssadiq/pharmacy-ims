@@ -1235,3 +1235,8 @@ input[aria-invalid='true'], select[aria-invalid='true'] { border-color: var(--ne
 /* A tick box with its label next to it (e.g. "Prescription-only" on the medication form) */
 .check { display: flex; align-items: center; gap: 8px; margin: 12px 0; font-weight: 500; }
 .check input { width: auto; min-height: 0; }
+
+/* What is in stock instead of an out-of-stock medication (components/AlternativesList.jsx) */
+.alternatives { display: block; margin-top: 6px; font-size: var(--fs-small); font-weight: 400; }
+.alternatives__title { font-weight: 500; }
+.alternatives__list { margin: 4px 0 0; padding: 0; list-style: none; display: grid; gap: 4px; }

@@ -223,7 +223,7 @@
     "finding": "يخرج المخزون من الرف عند إتمام الفاتورة. يُصرف كل بند من التشغيلة الأقرب إلى انتهاء الصلاحية أولًا، ولا يمكن التراجع عن ذلك.",
     "addFormLabel": "إضافة دواء إلى الفاتورة",
     "addTitle": "إضافة إلى الفاتورة",
-    "addNote": "لا يمكن اختيار الأدوية النافدة من المخزون.",
+    "addNote": "اختر دواءً غير متوفر لترى المتوفر بدلًا منه.",
     "selectMedication": "اختر دواءً...",
     "option": "{name} (المتوفر {quantity})",
     "optionUnavailable": "{name} (المتوفر {quantity} - غير متاح)",
@@ -276,7 +276,8 @@
     "basketUnits_two": "وحدتان",
     "basketUnits_few": "<num>{count}</num> وحدات",
     "basketUnits_many": "<num>{count}</num> وحدة",
-    "basketUnits_other": "<num>{count}</num> وحدة"
+    "basketUnits_other": "<num>{count}</num> وحدة",
+    "errorOutOfStock": "{name} غير متوفر."
   },
   "forecast": {
     "title": "التنبؤ بالطلب",
@@ -647,5 +648,11 @@
     "PHONE_REQUIRED": "أضف رقم هاتف إلى حسابك أولًا، حتى تتصل بك الصيدلية عندما يصبح الطلب جاهزًا.",
     "MEDICATION_HAS_HISTORY": "لهذا الدواء مبيعات أو طلبات، فلا يمكن حذفه. يبقى موقوفًا بدلًا من ذلك.",
     "MEDICATION_DISCONTINUED": "{name} موقوف ولا يمكن بيعه."
+  },
+  "alternatives": {
+    "title": "المتوفر بدلًا منه:",
+    "none": "لا يوجد دواء مشابه متوفر حاليًا.",
+    "same_ingredient": "المادة الفعّالة نفسها",
+    "same_category": "استعمال مشابه: اسأل الصيدلي أولًا"
   }
 }
