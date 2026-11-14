@@ -2,7 +2,8 @@
 -- Run by   npm run db:migrate   (see migrate.js).
 -- The six tables from the project specification, plus:
 --   medication_batches  stock is kept per lot, so each delivery has its own expiry date
---   preorders           patients asking for out-of-stock medications (GP2 addition)
+--   preorders           patient orders, with their medications in preorder_items (GP2 addition)
+--   medication_interactions  known interactions between active ingredients (GP2 addition)
 --   password_resets     "forgot password" links (GP2 addition)
 
 CREATE DATABASE IF NOT EXISTS pharmacy_ims
@@ -116,33 +117,58 @@ CREATE TABLE IF NOT EXISTS chat_messages (
   CONSTRAINT fk_chat_messages_sender  FOREIGN KEY (sender_id)       REFERENCES users (id)         ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- Patient requests for a medication that is out of stock (GP2 addition).
--- No stock is reserved when a request is made; marking it collected dispenses
--- it through the normal FEFO path (services/preorderService.js).
--- `pending_key` exists only while a request is pending, so its unique key
--- allows one pending request per patient and medication while keeping any
--- number of finished ones (MySQL has no partial unique index; NULLs never clash).
--- It is VIRTUAL because MySQL forbids ON DELETE CASCADE on the base columns of
--- a STORED generated column; an indexed virtual column is allowed.
--- Deleting a patient or a medication removes their requests with them.
+-- Patient orders (GP2 addition). A patient orders one or more medications ahead of
+-- time, in stock or not; staff mark the order ready and the patient collects it.
+-- This table is the order itself; its medications are the rows of preorder_items.
+--   status:       pending -> ready -> collected   (or cancelled before it is collected)
+--   total_price:  the sum of its lines at the prices of the day it was ordered
+--   payment_method / payment_status: cash is paid on collection; card is a DEMO payment
+--     taken when the order is placed (no real card is charged). A cancelled paid order
+--     becomes "refunded".
+--   prescription_*: an order with a prescription-only medication must come with a photo
+--     of the prescription. The photo is a file on disk (like a chat image); only its
+--     generated name is stored. Staff approve or reject it; a rejection cancels the order
+--     and prescription_reason tells the patient why.
+-- No stock is reserved when an order is made; collecting it dispenses every line through
+-- the normal FEFO path (services/preorderService.js).
+-- Deleting a patient removes their orders with them.
 CREATE TABLE IF NOT EXISTS preorders (
-  id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  patient_id    INT UNSIGNED NOT NULL,
-  medication_id INT UNSIGNED NOT NULL,
-  quantity      INT NOT NULL,
-  status        ENUM('pending', 'ready', 'collected', 'cancelled') NOT NULL DEFAULT 'pending',
-  note          VARCHAR(500) NULL,
-  created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  pending_key   VARCHAR(24) GENERATED ALWAYS AS
-                  (IF(status = 'pending', CONCAT(patient_id, ':', medication_id), NULL)) VIRTUAL,
+  id                  INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  patient_id          INT UNSIGNED NOT NULL,
+  status              ENUM('pending', 'ready', 'collected', 'cancelled') NOT NULL DEFAULT 'pending',
+  note                VARCHAR(500) NULL,
+  total_price         DECIMAL(10, 2) NOT NULL,
+  payment_method      ENUM('cash', 'card') NOT NULL DEFAULT 'cash',
+  payment_status      ENUM('unpaid', 'paid', 'refunded') NOT NULL DEFAULT 'unpaid',
+  prescription_status ENUM('not_needed', 'waiting', 'approved', 'rejected') NOT NULL DEFAULT 'not_needed',
+  prescription_path   VARCHAR(64) NULL,
+  prescription_mime   VARCHAR(20) NULL,
+  prescription_reason VARCHAR(255) NULL,
+  created_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
-  UNIQUE KEY uq_preorders_pending (pending_key),
+  UNIQUE KEY uq_preorders_prescription (prescription_path),
   KEY idx_preorders_status_created (status, created_at),
   KEY idx_preorders_patient (patient_id),
-  CONSTRAINT fk_preorders_patient    FOREIGN KEY (patient_id)    REFERENCES users (id)       ON DELETE CASCADE,
-  CONSTRAINT fk_preorders_medication FOREIGN KEY (medication_id) REFERENCES medications (id) ON DELETE CASCADE,
-  CONSTRAINT chk_preorders_quantity CHECK (quantity > 0)
+  CONSTRAINT fk_preorders_patient FOREIGN KEY (patient_id) REFERENCES users (id) ON DELETE CASCADE,
+  CONSTRAINT chk_preorders_total CHECK (total_price >= 0)
+) ENGINE=InnoDB;
+
+-- The medications of an order: one row per medication, with the quantity and the price
+-- it had when the order was placed (so a later price change does not alter old orders).
+-- A medication that appears in an order cannot be deleted (it can be discontinued), so
+-- the medication foreign key has no ON DELETE CASCADE.
+CREATE TABLE IF NOT EXISTS preorder_items (
+  id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  preorder_id   INT UNSIGNED NOT NULL,
+  medication_id INT UNSIGNED NOT NULL,
+  quantity      INT NOT NULL,
+  unit_price    DECIMAL(10, 2) NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_preorder_items_line (preorder_id, medication_id),
+  CONSTRAINT fk_preorder_items_preorder   FOREIGN KEY (preorder_id)   REFERENCES preorders (id)   ON DELETE CASCADE,
+  CONSTRAINT fk_preorder_items_medication FOREIGN KEY (medication_id) REFERENCES medications (id),
+  CONSTRAINT chk_preorder_items_quantity CHECK (quantity > 0)
 ) ENGINE=InnoDB;
 
 -- Password reset tokens (GP2 addition). Only the SHA-256 hash of a token is

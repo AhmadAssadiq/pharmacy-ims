@@ -1,11 +1,32 @@
-// Calls to the server for preorders: patients request and cancel, staff move requests on.
-import { request } from './client';
+// Calls to the server for orders: patients place and cancel them, staff move them on
+// and check prescriptions.
+import { fetchBlob, request } from './client';
 
-export const createPreorder = (payload) => request('/preorders', { method: 'POST', body: payload });
-export const fetchMyPreorders = () => request('/preorders/mine');
-export const cancelMyPreorder = (id) => request(`/preorders/${id}/cancel`, { method: 'POST' });
+/**
+ * Places an order. It is sent as a form so the prescription photo can go with it:
+ *   lines: [{ medication_id, quantity }], note, paymentMethod ('cash' or 'card'),
+ *   prescriptionFile: the photo (only when the order needs one).
+ */
+export const createOrder = ({ lines, note, paymentMethod, prescriptionFile }) => {
+  const form = new FormData();
+  form.append('items', JSON.stringify(lines));
+  form.append('note', note || '');
+  form.append('payment_method', paymentMethod);
+  if (prescriptionFile) {
+    form.append('prescription', prescriptionFile);
+  }
+  return request('/preorders', { method: 'POST', body: form });
+};
 
-export const fetchPreorders = () => request('/preorders');
-/** `delivery` ({ quantity, expiry_date, batch_number }) goes with "ready": the lot that arrived for the request. */
-export const updatePreorderStatus = (id, status, delivery) =>
-  request(`/preorders/${id}`, { method: 'PATCH', body: delivery ? { status, delivery } : { status } });
+export const fetchMyOrders = () => request('/preorders/mine');
+export const cancelMyOrder = (id) => request(`/preorders/${id}/cancel`, { method: 'POST' });
+
+export const fetchOrders = () => request('/preorders');
+export const updateOrderStatus = (id, status) => request(`/preorders/${id}`, { method: 'PATCH', body: { status } });
+
+/** Staff approve ('approve') or reject ('reject', with a reason) an order's prescription. */
+export const decidePrescription = (id, decision, reason) =>
+  request(`/preorders/${id}/prescription`, { method: 'POST', body: { decision, reason } });
+
+/** The prescription photo of an order (it needs the login token, so it comes as a Blob). */
+export const fetchPrescription = (id) => fetchBlob(`/preorders/${id}/prescription`);

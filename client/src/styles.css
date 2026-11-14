@@ -1245,3 +1245,40 @@ input[aria-invalid='true'], select[aria-invalid='true'] { border-color: var(--ne
 .interactions { display: grid; gap: 6px; margin: 12px 0; }
 .interactions__list { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
 .interactions__note { font-size: var(--fs-small); }
+
+/* ---- Orders (GP2 addition) ---- */
+
+/* The medications of an order: name x quantity on one side, the line's price on the other */
+.order-items { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.order-items__line { display: flex; justify-content: space-between; gap: 12px; }
+.order-items__rx { margin-inline-start: 6px; }
+.order-items__stock { display: block; font-size: var(--fs-small); color: var(--muted); }
+.order-items__stock.text-danger { color: var(--negative); }
+
+/* One order on the patient's "My orders" page */
+.order-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px; }
+.order-card { border: 1px solid var(--rule); border-radius: 8px; padding: 14px 16px; display: grid; gap: 10px; }
+.order-card__header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; }
+.order-card .sale-total { margin-top: 0; }
+
+/* The order being put together on the medications page */
+.cart__quantity { width: 72px; }
+.cart__price { min-width: 56px; text-align: end; }
+.cart__section { border: 0; margin: 16px 0; padding: 0; }
+.cart__section legend, .cart__section h3 { font-weight: 600; margin-bottom: 6px; padding: 0; }
+
+/* The demo card payment pop-up */
+.payment { text-align: center; }
+.payment__tick { color: var(--positive, #1a7f4b); margin: 0 auto 8px; display: block; }
+.payment__spinner {
+  display: block; width: 40px; height: 40px; margin: 0 auto 12px;
+  border: 3px solid var(--rule); border-top-color: var(--text); border-radius: 50%;
+  animation: payment-spin 0.9s linear infinite;
+}
+@keyframes payment-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .payment__spinner { animation: none; } }
+.payment .modal__actions { justify-content: center; }
+
+/* A prescription photo */
+.prescription-image { display: block; margin: 8px 0; }
+.prescription-image img { max-width: 100%; max-height: 320px; border: 1px solid var(--rule); border-radius: 6px; }

@@ -20,6 +20,7 @@ const STAFF_LINKS = [
 
 const PATIENT_LINKS = [
   { to: '/patient/availability', label: 'nav.availability' },
+  { to: '/patient/orders', label: 'nav.myOrders' },
   { to: '/patient/chat', label: 'nav.patientChat' },
   { to: '/patient/about', label: 'nav.about' },
   { to: '/contact', label: 'nav.contact' },

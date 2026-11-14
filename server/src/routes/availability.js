@@ -1,6 +1,6 @@
-// Route under /api/availability: which medications are in stock (FR 7).
-// Any logged-in user may use it. Only "in stock: yes/no" is shown - never quantities,
-// prices or suppliers.
+// Route under /api/availability: the medications a patient can see and order (FR 7).
+// Any logged-in user may use it. It shows "in stock: yes/no", the price and whether a
+// prescription is needed - never quantities or suppliers.
 import express from 'express';
 import { requireLogin } from '../middleware/auth.js';
 import { getAvailability } from '../services/medicationService.js';

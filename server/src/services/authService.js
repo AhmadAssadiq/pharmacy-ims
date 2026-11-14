@@ -130,9 +130,9 @@ export function canDeleteOwnAccount(role) {
 // `password` is already validated (deleteAccountSchema).
 //
 // Deleting the user row also deletes, through the database's foreign keys (ON DELETE CASCADE):
-// their chat session and every message in it, their preorders and their password reset tokens.
+// their chat session and every message in it, their orders and their password reset tokens.
 // sales_history is not linked to users, so dispensing records and the forecast are unchanged.
-// Their chat images are then removed from the disk.
+// Their chat images and prescription photos are then removed from the disk.
 export async function deleteOwnAccount(user, password) {
   // 1. Staff cannot delete themselves here
   if (!canDeleteOwnAccount(user.role)) {
@@ -142,12 +142,16 @@ export async function deleteOwnAccount(user, password) {
   // 2. Check the password (a wrong one counts towards the lockout, like a wrong login)
   const account = await checkPasswordWithLockout(user.email, password, 'Invalid password.');
 
-  // 3. Note which image files belong to their chat, before the rows that point to them are gone
+  // 3. Note which image files belong to them, before the rows that point to them are gone:
+  //    the images in their chat and the prescription photos of their orders
   const [imageRows] = await db.query(
     `SELECT m.attachment_path FROM chat_messages m
      JOIN chat_sessions s ON s.id = m.chat_session_id
-     WHERE s.patient_id = ? AND m.attachment_path IS NOT NULL`,
-    [account.id]
+     WHERE s.patient_id = ? AND m.attachment_path IS NOT NULL
+     UNION ALL
+     SELECT prescription_path FROM preorders
+     WHERE patient_id = ? AND prescription_path IS NOT NULL`,
+    [account.id, account.id]
   );
 
   // 4. Delete the account (the database removes everything linked to it)
@@ -161,7 +165,7 @@ export async function deleteOwnAccount(user, password) {
     try {
       await deleteStoredImage(row.attachment_path);
     } catch (error) {
-      console.error(`Could not remove chat image ${row.attachment_path}:`, error.message);
+      console.error(`Could not remove image ${row.attachment_path}:`, error.message);
     }
   }
 }

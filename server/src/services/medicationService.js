@@ -166,7 +166,7 @@ export async function deleteMedication(id) {
   await getMedication(id); // 404 if it does not exist
 
   const [sales] = await db.query('SELECT COUNT(*) AS total FROM sales_history WHERE medication_id = ?', [id]);
-  const [orders] = await db.query('SELECT COUNT(*) AS total FROM preorders WHERE medication_id = ?', [id]);
+  const [orders] = await db.query('SELECT COUNT(*) AS total FROM preorder_items WHERE medication_id = ?', [id]);
   if (sales[0].total > 0 || orders[0].total > 0) {
     throw createError(409, 'This medication has sales or orders. Discontinue it instead of deleting it.', {
       code: ERROR_CODES.MEDICATION_HAS_HISTORY,
@@ -177,8 +177,9 @@ export async function deleteMedication(id) {
   await db.query('DELETE FROM medications WHERE id = ?', [id]);
 }
 
-// What patients may see (FR 7): only whether each medication is in stock.
-// Quantities, prices and suppliers are never included. Discontinued medications are left out.
+// What patients may see (FR 7): whether each medication is in stock, its price (they can
+// order and pay - GP2 addition) and whether it needs a prescription.
+// Quantities and suppliers are never included. Discontinued medications are left out.
 export async function getAvailability() {
   const medications = await getActiveMedications();
   return medications.map((medication) => ({
@@ -186,6 +187,8 @@ export async function getAvailability() {
     name: medication.name,
     category: medication.category,
     active_ingredient: medication.active_ingredient,
+    unit_price: Number(medication.unit_price),
+    requires_prescription: medication.requires_prescription,
     in_stock: medication.quantity > 0,
     // What is in stock instead, when this one is not (names only)
     alternatives: medication.alternatives,
@@ -216,7 +219,6 @@ export async function findBatchesOfMedication(medicationId, connection = db) {
 }
 
 // Saves a new lot and returns it. The received date is today.
-// Also used when a preorder's delivery arrives (preorderService.js).
 export async function insertBatch(connection, { medication_id, quantity, expiry_date, batch_number }) {
   const [result] = await connection.query(
     `INSERT INTO medication_batches (medication_id, quantity, expiry_date, batch_number, received_date)

@@ -8,13 +8,13 @@ import { medicationSchema, batchSchema, newMedicationSchema } from '../src/valid
 import {
   saleLineSchema,
   validateSale,
-  newPreorderSchema,
+  validateOrder,
   preorderStatusSchema,
+  prescriptionDecisionSchema,
   validateStatusFilter,
   canChangeStatus,
-  validateDelivery,
 } from '../src/validation/saleSchemas.js';
-import { PREORDER_MAX_QUANTITY } from '../src/constants.js';
+import { PREORDER_MAX_QUANTITY, PREORDER_MAX_ITEMS } from '../src/constants.js';
 
 // Runs a schema and returns { data } when the input is valid, or { errors } with one message per field.
 function check(schema, input) {
@@ -209,25 +209,65 @@ test('a sale line needs a medication and a positive whole quantity', () => {
   assert.equal(check(saleLineSchema, { medication_id: 3, quantity: 1.5 }).errors.quantity, 'Quantity must be a whole number');
 });
 
-// ---- preorders (GP2 addition) ----
+// ---- patient orders (GP2 addition) ----
 
-test('a preorder trims its note and stores an empty note as null', () => {
-  assert.deepEqual(check(newPreorderSchema, { medication_id: 7, quantity: '2', note: ' for my mother ' }).data, {
-    medication_id: 7,
-    quantity: 2,
-    note: 'for my mother',
+const GOOD_ORDER = { items: [{ medication_id: 7, quantity: '2' }], payment_method: 'cash' };
+
+test('an order merges repeated medications, sorts its lines and cleans its note', () => {
+  const order = validateOrder({
+    items: [
+      { medication_id: 5, quantity: 1 },
+      { medication_id: 3, quantity: 2 },
+      { medication_id: 5, quantity: 4 },
+    ],
+    note: ' for my mother ',
+    payment_method: ' card ',
   });
-  assert.equal(check(newPreorderSchema, { medication_id: 1, quantity: 1, note: '   ' }).data.note, null);
-  assert.equal(check(newPreorderSchema, { medication_id: 1, quantity: 1 }).data.note, null);
+  assert.deepEqual(order, {
+    lines: [
+      { medication_id: 3, quantity: 2 },
+      { medication_id: 5, quantity: 5 },
+    ],
+    note: 'for my mother',
+    payment_method: 'card',
+  });
+  assert.equal(validateOrder({ ...GOOD_ORDER, note: '   ' }).note, null);
+  assert.equal(validateOrder(GOOD_ORDER).note, null);
 });
 
-test('a preorder is capped at 100 units and 500 characters of note', () => {
-  assert.deepEqual(check(newPreorderSchema, { medication_id: 1, quantity: PREORDER_MAX_QUANTITY }).errors, {});
+test('an order sent as a form has its medications as JSON text', () => {
+  const order = validateOrder({ items: '[{"medication_id":3,"quantity":2}]', payment_method: 'cash' });
+  assert.deepEqual(order.lines, [{ medication_id: 3, quantity: 2 }]);
+  assert.equal(errorsThrownBy(() => validateOrder({ items: 'not json', payment_method: 'cash' })).items, 'The list of medications could not be read');
+});
+
+test('an order needs at least one medication, at most ten, and at most 100 units of each', () => {
+  assert.equal(errorsThrownBy(() => validateOrder({ items: [], payment_method: 'cash' })).items, 'Add at least one medication to the order');
   assert.equal(
-    check(newPreorderSchema, { medication_id: 1, quantity: PREORDER_MAX_QUANTITY + 1 }).errors.quantity,
-    `Quantity must be at most ${PREORDER_MAX_QUANTITY}`
+    errorsThrownBy(() => validateOrder({ items: [{ medication_id: 1, quantity: PREORDER_MAX_QUANTITY + 1 }], payment_method: 'cash' })).items,
+    `Line 1: Quantity must be at most ${PREORDER_MAX_QUANTITY}`
   );
-  assert.ok(check(newPreorderSchema, { medication_id: 1, quantity: 1, note: 'x'.repeat(501) }).errors.note);
+  const tooMany = [];
+  for (let id = 1; id <= PREORDER_MAX_ITEMS + 1; id++) {
+    tooMany.push({ medication_id: id, quantity: 1 });
+  }
+  assert.equal(
+    errorsThrownBy(() => validateOrder({ items: tooMany, payment_method: 'cash' })).items,
+    `An order can hold at most ${PREORDER_MAX_ITEMS} different medications`
+  );
+});
+
+test('an order must say cash or card, and its note is capped at 500 characters', () => {
+  assert.equal(errorsThrownBy(() => validateOrder({ items: GOOD_ORDER.items })).payment_method, 'Choose cash or card');
+  assert.equal(errorsThrownBy(() => validateOrder({ ...GOOD_ORDER, payment_method: 'cheque' })).payment_method, 'Choose cash or card');
+  assert.ok(errorsThrownBy(() => validateOrder({ ...GOOD_ORDER, note: 'x'.repeat(501) })).note);
+});
+
+test('a prescription can be approved, or rejected with a reason', () => {
+  assert.deepEqual(check(prescriptionDecisionSchema, { decision: 'approve' }).data, { decision: 'approve', reason: '' });
+  assert.deepEqual(check(prescriptionDecisionSchema, { decision: 'reject', reason: ' Expired ' }).data, { decision: 'reject', reason: 'Expired' });
+  assert.equal(check(prescriptionDecisionSchema, { decision: 'reject' }).errors.reason, 'Say why the prescription is rejected');
+  assert.equal(check(prescriptionDecisionSchema, { decision: 'maybe' }).errors.decision, 'Choose approve or reject');
 });
 
 test('only the documented status changes are allowed', () => {
@@ -249,17 +289,4 @@ test('the status and the list filter must be a known status', () => {
   assert.equal(validateStatusFilter(undefined), null);
   assert.equal(validateStatusFilter('pending'), 'pending');
   assert.throws(() => validateStatusFilter('nope'));
-});
-
-test('a delivery marked "ready" must cover the request and still be in date after today', () => {
-  const today = '2026-09-16';
-  assert.deepEqual(validateDelivery({ quantity: 5, expiry_date: '2027-03-01', batch_number: 'OME-77' }, 2, today), {
-    quantity: 5,
-    expiry_date: '2027-03-01',
-    batch_number: 'OME-77',
-  });
-  assert.match(errorsThrownBy(() => validateDelivery({ quantity: 1, expiry_date: '2027-03-01' }, 2, today)).quantity, /at least the 2/);
-  assert.ok(errorsThrownBy(() => validateDelivery({ quantity: 2, expiry_date: today }, 2, today)).expiry_date);
-  assert.ok(errorsThrownBy(() => validateDelivery({ quantity: 2 }, 2, today)).expiry_date);
-  assert.ok(errorsThrownBy(() => validateDelivery(undefined, 2, today)).quantity);
 });

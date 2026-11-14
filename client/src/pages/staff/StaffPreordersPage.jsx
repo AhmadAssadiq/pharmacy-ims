@@ -1,55 +1,51 @@
-// The staff preorder queue (GP2 addition).
-// Patients request medications that are out of stock; staff move each request on:
-//   pending  -> "Mark ready"     usually records the delivery that came in for it (it goes into stock),
-//                                unless the stock was already received on the Add stock page
-//   ready    -> "Collected"      sells it, soonest-expiring lot first - so it asks for confirmation
+// The staff orders queue (GP2 addition).
+// Patients order medications ahead of time, in stock or not; staff move each order on:
+//   pending  -> "Mark ready"   only when every medication is on the shelf (stock is received
+//                              on the Add stock page) and the prescription, if any, is approved
+//   ready    -> "Collected"    sells every medication, soonest-expiring lot first - so it asks
+//                              for confirmation
 //   pending or ready -> "Cancel"
+// An order with a prescription-only medication comes with a photo of the prescription:
+// "Check prescription" shows it, to approve or to reject with a reason (which cancels the order).
 // Every action opens a dialog; a failed action keeps the dialog open with the reason in it.
 import { useEffect, useRef, useState } from 'react';
-import { fetchPreorders, updatePreorderStatus } from '../../api/preorders';
+import { decidePrescription, fetchOrders, updateOrderStatus } from '../../api/preorders';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import { PreorderStatus } from '../../components/StatusMark';
 import PhoneLink from '../../components/PhoneLink';
 import StyledText from '../../components/StyledText';
+import { OrderItems, PrescriptionMark, paymentText } from '../../components/order/OrderDetails';
+import PrescriptionImage from '../../components/order/PrescriptionImage';
 import { useI18n } from '../../i18n/useI18n';
 import constants from '../../../../shared/constants.json';
 
-const { PREORDER_STATUS } = constants;
+const { PREORDER_STATUS, PRESCRIPTION_STATUS, PAYMENT_STATUS } = constants;
 
 // The filter buttons: all, pending, ready, collected, cancelled
 const FILTERS = ['all', ...Object.values(PREORDER_STATUS)];
 
-// Tomorrow as YYYY-MM-DD: a delivery for a preorder must still be in date after today
-function tomorrow() {
-  const date = new Date();
-  date.setDate(date.getDate() + 1);
-  return date.toISOString().slice(0, 10);
-}
-
-// The delivery form in the "Mark ready" dialog.
-// mode: 'deliver' = record the lot that arrived, 'shelf' = the stock is already on the shelf
-const EMPTY_DELIVERY = { mode: 'deliver', quantity: '', expiry_date: '', batch_number: '' };
-
 export default function StaffPreordersPage() {
-  const { t, te, formatDateTime } = useI18n();
-  const [preorders, setPreorders] = useState([]);
+  const { t, te, formatDateTime, formatPrice } = useI18n();
+  const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState(null);
   const [filter, setFilter] = useState(PREORDER_STATUS.PENDING);
-  // The open dialog: { preorder, status } (the status it will move to), or null
+  // The open status dialog: { order, status } (the status it will move to), or null
   const [confirming, setConfirming] = useState(null);
-  const [busyId, setBusyId] = useState(null); // the request being saved
-  const [delivery, setDelivery] = useState(EMPTY_DELIVERY);
+  // The open prescription dialog: the order whose prescription is being checked, or null
+  const [checking, setChecking] = useState(null);
+  const [decision, setDecision] = useState('approve'); // 'approve' or 'reject'
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
   const [dialogError, setDialogError] = useState(null);
-  const [deliveryErrors, setDeliveryErrors] = useState({});
   const errorRef = useRef(null);
 
-  // Loads (or reloads) every request
-  async function loadPreorders() {
+  // Loads (or reloads) every order
+  async function loadOrders() {
     try {
-      const data = await fetchPreorders();
-      setPreorders(data.preorders);
+      const data = await fetchOrders();
+      setOrders(data.preorders);
     } catch (loadError) {
       setError(loadError);
     } finally {
@@ -58,7 +54,7 @@ export default function StaffPreordersPage() {
   }
 
   useEffect(() => {
-    loadPreorders();
+    loadOrders();
   }, []);
 
   // When an error appears, move the keyboard focus to it
@@ -68,101 +64,99 @@ export default function StaffPreordersPage() {
     }
   }, [error]);
 
-  // How many requests have each status (for the filter buttons)
-  const counts = { all: preorders.length };
+  // How many orders have each status (for the filter buttons)
+  const counts = { all: orders.length };
   for (const status of Object.values(PREORDER_STATUS)) {
     counts[status] = 0;
   }
-  for (const preorder of preorders) {
-    counts[preorder.status] += 1;
+  for (const order of orders) {
+    counts[order.status] += 1;
   }
 
-  const visiblePreorders = filter === 'all' ? preorders : preorders.filter((preorder) => preorder.status === filter);
+  const visibleOrders = filter === 'all' ? orders : orders.filter((order) => order.status === filter);
 
-  // Opens the dialog for moving `preorder` to `status`
-  function openDialog(preorder, status) {
+  // Opens the dialog for moving `order` to `status`
+  function openStatusDialog(order, status) {
     setDialogError(null);
-    setDeliveryErrors({});
-    setDelivery({ ...EMPTY_DELIVERY, quantity: String(preorder.quantity) });
-    setConfirming({ preorder, status });
+    setConfirming({ order, status });
   }
 
-  // Checks the delivery form before sending it. Returns { errors, lot }.
-  function checkDelivery(preorder) {
-    const errors = {};
-    const quantity = Number(delivery.quantity);
-    if (!Number.isInteger(quantity) || quantity < preorder.quantity) {
-      errors.quantity = t('preorders.deliveryQuantityError', { count: preorder.quantity });
-    }
-    if (!delivery.expiry_date || delivery.expiry_date < tomorrow()) {
-      errors.expiry_date = t('preorders.deliveryExpiryError');
-    }
-    const lot = { quantity, expiry_date: delivery.expiry_date, batch_number: delivery.batch_number };
-    return { errors, lot };
+  // Opens the "check prescription" dialog
+  function openPrescriptionDialog(order) {
+    setDialogError(null);
+    setDecision('approve');
+    setReason('');
+    setChecking(order);
   }
 
   // Saves the status change chosen in the dialog
   async function confirmStatusChange() {
-    const { preorder, status } = confirming;
+    const { order, status } = confirming;
     setError(null);
     setNotice(null);
     setDialogError(null);
-
-    // "Mark ready" with a delivery: check the delivery form first
-    let lot;
-    if (status === PREORDER_STATUS.READY && delivery.mode === 'deliver') {
-      const check = checkDelivery(preorder);
-      setDeliveryErrors(check.errors);
-      if (Object.keys(check.errors).length > 0) {
-        return;
-      }
-      lot = check.lot;
-    }
-
-    setBusyId(preorder.id);
+    setBusy(true);
     try {
-      await updatePreorderStatus(preorder.id, status, lot);
-      await loadPreorders();
-      const messageKey = lot ? 'preorders.moved.readyDelivered' : `preorders.moved.${status}`;
-      setNotice(t(messageKey, { name: preorder.medication_name, patient: preorder.patient_name, quantity: lot ? lot.quantity : undefined }));
+      await updateOrderStatus(order.id, status);
+      await loadOrders();
+      setNotice(t(`orders.moved.${status}`, { id: order.id, patient: order.patient_name }));
       setConfirming(null); // only a success closes the dialog
     } catch (saveError) {
       setDialogError(te(saveError));
-      setDeliveryErrors(saveError.details || {});
     } finally {
-      setBusyId(null);
+      setBusy(false);
     }
   }
 
-  // The dialog's title, text and button for each kind of status change
+  // Saves the decision on a prescription: approve, or reject with a reason
+  async function confirmPrescription() {
+    setError(null);
+    setNotice(null);
+    setDialogError(null);
+    if (decision === 'reject' && !reason.trim()) {
+      setDialogError(t('orders.rejectReasonRequired'));
+      return;
+    }
+    setBusy(true);
+    try {
+      await decidePrescription(checking.id, decision, reason);
+      await loadOrders();
+      setNotice(t(decision === 'approve' ? 'orders.approved' : 'orders.rejected', { id: checking.id }));
+      setChecking(null);
+    } catch (saveError) {
+      setDialogError(te(saveError));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // The status dialog's title, text and button for each kind of status change
   let dialog = null;
   if (confirming) {
-    const { preorder, status } = confirming;
-    const details = { quantity: preorder.quantity, name: preorder.medication_name, patient: preorder.patient_name };
+    const { order, status } = confirming;
+    const details = { id: order.id, patient: order.patient_name };
     if (status === PREORDER_STATUS.READY) {
-      dialog = { title: t('preorders.readyTitle'), lead: t('preorders.readyLead', details), confirmLabel: t('preorders.markReady') };
+      dialog = { title: t('orders.readyTitle', details), lead: t('orders.readyLead', details), confirmLabel: t('preorders.markReady') };
     } else if (status === PREORDER_STATUS.COLLECTED) {
-      dialog = { title: t('preorders.collectTitle'), lead: t('preorders.collectLead', details), confirmLabel: t('preorders.collectConfirm') };
-    } else {
+      // Cash is taken now; a card order was already paid (demo)
+      const isPaid = order.payment_status === PAYMENT_STATUS.PAID;
+      const paymentLine = isPaid ? t('orders.collectPaid') : t('orders.collectCash', { total: formatPrice(order.total_price) });
       dialog = {
-        title: t('preorders.cancelTitle'),
-        lead: t('preorders.staffCancelLead', { patient: preorder.patient_name }),
-        confirmLabel: t('preorders.cancelRequest'),
+        title: t('orders.collectTitle', details),
+        lead: `${t('orders.collectLead', details)} ${paymentLine}`,
+        confirmLabel: t('preorders.collectConfirm'),
       };
+    } else {
+      dialog = { title: t('orders.cancelTitle'), lead: t('orders.staffCancelLead', details), confirmLabel: t('orders.cancel') };
     }
   }
 
-  // The one-line finding at the top: ready requests first, then waiting ones
+  // The one-line finding at the top: ready orders first, then waiting ones
   let finding = t('preorders.findingNone');
   if (counts.ready > 0) {
     finding = <StyledText id="preorders.findingReady" count={counts.ready} />;
   } else if (counts.pending > 0) {
     finding = <StyledText id="preorders.findingPending" count={counts.pending} />;
-  }
-
-  // Changes one field of the delivery form
-  function changeDelivery(field, value) {
-    setDelivery({ ...delivery, [field]: value });
   }
 
   return (
@@ -197,64 +191,75 @@ export default function StaffPreordersPage() {
         </div>
 
         {loading && <p className="empty">{t('common.loading')}</p>}
-        {!loading && visiblePreorders.length === 0 && <p className="empty empty--framed">{t('preorders.staffEmpty')}</p>}
-        {!loading && visiblePreorders.length > 0 && (
+        {!loading && visibleOrders.length === 0 && <p className="empty empty--framed">{t('preorders.staffEmpty')}</p>}
+        {!loading && visibleOrders.length > 0 && (
           <div className="table-wrap" tabIndex={0} role="region" aria-label={t('preorders.regionLabel')}>
             <table className="table">
               <caption className="sr-only">{t('preorders.caption')}</caption>
               <thead>
                 <tr>
-                  <th scope="col">{t('preorders.colRequested')}</th>
+                  <th scope="col">{t('orders.colOrder')}</th>
                   <th scope="col">{t('preorders.colPatient')}</th>
-                  <th scope="col">{t('common.medication')}</th>
-                  <th scope="col" className="num">{t('common.quantity')}</th>
-                  <th scope="col">{t('preorders.colNote')}</th>
+                  <th scope="col">{t('orders.colMedications')}</th>
+                  <th scope="col">{t('orders.colPayment')}</th>
                   <th scope="col">{t('common.status')}</th>
                   <th scope="col" className="actions">{t('common.actions')}</th>
                 </tr>
               </thead>
               <tbody>
-                {visiblePreorders.map((preorder) => {
-                  const isPending = preorder.status === PREORDER_STATUS.PENDING;
-                  const isReady = preorder.status === PREORDER_STATUS.READY;
-                  const isBusy = busyId === preorder.id;
+                {visibleOrders.map((order) => {
+                  const isPending = order.status === PREORDER_STATUS.PENDING;
+                  const isReady = order.status === PREORDER_STATUS.READY;
+                  const prescriptionWaiting = isPending && order.prescription_status === PRESCRIPTION_STATUS.WAITING;
                   return (
-                    <tr key={preorder.id}>
-                      <td className="date">{formatDateTime(preorder.created_at)}</td>
+                    <tr key={order.id}>
+                      <th scope="row" style={{ fontWeight: 500 }}>
+                        {t('orders.orderNumber', { id: order.id })}
+                        <span className="med-sub date">{formatDateTime(order.created_at)}</span>
+                      </th>
                       <td>
-                        <bdi>{preorder.patient_name}</bdi>
-                        <span className="med-sub"><PhoneLink phone={preorder.patient_phone} /></span>
+                        <bdi>{order.patient_name}</bdi>
+                        <span className="med-sub"><PhoneLink phone={order.patient_phone} /></span>
                       </td>
-                      <th scope="row" style={{ fontWeight: 500 }}><bdi>{preorder.medication_name}</bdi></th>
-                      <td className="num">{preorder.quantity}</td>
-                      <td className="muted">{preorder.note ? <bdi>{preorder.note}</bdi> : '—'}</td>
-                      <td><PreorderStatus status={preorder.status} t={t} /></td>
+                      <td>
+                        {/* Each medication, with whether it is on the shelf right now */}
+                        <OrderItems items={order.items} showStock={isPending || isReady} />
+                        {order.note && <span className="med-sub" dir="auto">{t('orders.noteLine', { note: order.note })}</span>}
+                      </td>
+                      <td>
+                        <span className="num">{formatPrice(order.total_price)}</span>
+                        <span className="med-sub">{paymentText(order, t)}</span>
+                      </td>
+                      <td>
+                        <span className="badges">
+                          <PreorderStatus status={order.status} t={t} />
+                          <PrescriptionMark status={order.prescription_status} />
+                        </span>
+                        {order.prescription_reason && (
+                          <span className="med-sub">{t('orders.rejectedReason', { reason: order.prescription_reason })}</span>
+                        )}
+                      </td>
                       <td className="actions">
-                        {isPending && (
-                          <button type="button" className="btn btn--sm" disabled={isBusy} onClick={() => openDialog(preorder, PREORDER_STATUS.READY)}>
+                        {prescriptionWaiting && (
+                          <button type="button" className="btn btn--sm btn--primary" onClick={() => openPrescriptionDialog(order)}>
+                            {t('orders.checkPrescription')}
+                          </button>
+                        )}
+                        {isPending && !prescriptionWaiting && (
+                          <button type="button" className="btn btn--sm" onClick={() => openStatusDialog(order, PREORDER_STATUS.READY)}>
                             {t('preorders.markReady')}
                           </button>
                         )}
                         {isReady && (
-                          <button
-                            type="button"
-                            className="btn btn--sm btn--primary"
-                            disabled={isBusy}
-                            onClick={() => openDialog(preorder, PREORDER_STATUS.COLLECTED)}
-                          >
+                          <button type="button" className="btn btn--sm btn--primary" onClick={() => openStatusDialog(order, PREORDER_STATUS.COLLECTED)}>
                             {t('preorders.markCollected')}
                           </button>
                         )}
                         {(isPending || isReady) && (
                           <>
                             {' '}
-                            <button
-                              type="button"
-                              className="btn btn--sm btn--ghost"
-                              disabled={isBusy}
-                              onClick={() => openDialog(preorder, PREORDER_STATUS.CANCELLED)}
-                            >
-                              {t('preorders.cancelRequest')}
+                            <button type="button" className="btn btn--sm btn--ghost" onClick={() => openStatusDialog(order, PREORDER_STATUS.CANCELLED)}>
+                              {t('orders.cancel')}
                             </button>
                           </>
                         )}
@@ -268,13 +273,14 @@ export default function StaffPreordersPage() {
         )}
       </div>
 
+      {/* Dialog: mark ready, collected or cancelled */}
       <ConfirmDialog
         open={Boolean(confirming)}
         title={dialog ? dialog.title : ''}
         lead={dialog ? dialog.lead : undefined}
         confirmLabel={dialog ? dialog.confirmLabel : undefined}
         cancelLabel={t('sell.goBack')}
-        busy={Boolean(busyId)}
+        busy={busy}
         onCancel={() => setConfirming(null)}
         onConfirm={confirmStatusChange}
       >
@@ -283,51 +289,47 @@ export default function StaffPreordersPage() {
             {dialogError}
           </div>
         )}
+        {confirming && <OrderItems items={confirming.order.items} showStock />}
+      </ConfirmDialog>
 
-        {/* "Mark ready": record the delivery, or say the stock is already on the shelf */}
-        {confirming && confirming.status === PREORDER_STATUS.READY && (
-          <fieldset className="delivery">
-            <legend className="sr-only">{t('preorders.deliveryLegend')}</legend>
-            <label className="delivery__choice">
-              <input type="radio" name="delivery-mode" checked={delivery.mode === 'deliver'} onChange={() => changeDelivery('mode', 'deliver')} />
-              {t('preorders.deliveryRecord')}
-            </label>
-            {delivery.mode === 'deliver' && (
-              <div className="form-grid delivery__fields">
+      {/* Dialog: check a prescription */}
+      <ConfirmDialog
+        open={Boolean(checking)}
+        title={checking ? t('orders.prescriptionDialogTitle', { id: checking.id }) : ''}
+        lead={checking ? t('orders.prescriptionDialogLead', { patient: checking.patient_name }) : undefined}
+        confirmLabel={decision === 'approve' ? t('orders.approve') : t('orders.reject')}
+        cancelLabel={t('sell.goBack')}
+        busy={busy}
+        onCancel={() => setChecking(null)}
+        onConfirm={confirmPrescription}
+      >
+        {dialogError && (
+          <div className="alert alert--error" role="alert">
+            {dialogError}
+          </div>
+        )}
+        {checking && (
+          <>
+            <PrescriptionImage orderId={checking.id} />
+            <OrderItems items={checking.items} />
+            <fieldset className="cart__section">
+              <legend className="sr-only">{t('orders.decisionLegend')}</legend>
+              <label className="check">
+                <input type="radio" name="prescription-decision" checked={decision === 'approve'} onChange={() => setDecision('approve')} />
+                <span>{t('orders.approveChoice')}</span>
+              </label>
+              <label className="check">
+                <input type="radio" name="prescription-decision" checked={decision === 'reject'} onChange={() => setDecision('reject')} />
+                <span>{t('orders.rejectChoice')}</span>
+              </label>
+              {decision === 'reject' && (
                 <label className="field">
-                  <span className="field__label">{t('batch.quantityReceived')}</span>
-                  <input
-                    type="number"
-                    min={confirming.preorder.quantity}
-                    step={1}
-                    value={delivery.quantity}
-                    onChange={(event) => changeDelivery('quantity', event.target.value)}
-                    aria-invalid={deliveryErrors.quantity ? 'true' : undefined}
-                  />
-                  {deliveryErrors.quantity && <span className="field__error">{deliveryErrors.quantity}</span>}
+                  <span className="field__label">{t('orders.rejectReasonLabel')}</span>
+                  <textarea rows={2} maxLength={255} value={reason} onChange={(event) => setReason(event.target.value)} dir="auto" />
                 </label>
-                <label className="field">
-                  <span className="field__label">{t('batch.lotExpiry')}</span>
-                  <input
-                    type="date"
-                    min={tomorrow()}
-                    value={delivery.expiry_date}
-                    onChange={(event) => changeDelivery('expiry_date', event.target.value)}
-                    aria-invalid={deliveryErrors.expiry_date ? 'true' : undefined}
-                  />
-                  {deliveryErrors.expiry_date && <span className="field__error">{deliveryErrors.expiry_date}</span>}
-                </label>
-                <label className="field">
-                  <span className="field__label">{t('batch.lotNumberOptional')}</span>
-                  <input maxLength={60} value={delivery.batch_number} onChange={(event) => changeDelivery('batch_number', event.target.value)} />
-                </label>
-              </div>
-            )}
-            <label className="delivery__choice">
-              <input type="radio" name="delivery-mode" checked={delivery.mode === 'shelf'} onChange={() => changeDelivery('mode', 'shelf')} />
-              {t('preorders.deliveryOnShelf')}
-            </label>
-          </fieldset>
+              )}
+            </fieldset>
+          </>
         )}
       </ConfirmDialog>
     </>

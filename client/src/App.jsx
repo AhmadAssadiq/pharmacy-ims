@@ -23,6 +23,7 @@ import StaffForecastPage from './pages/staff/StaffForecastPage';
 import StaffChatInboxPage from './pages/staff/StaffChatInboxPage';
 import StaffPreordersPage from './pages/staff/StaffPreordersPage';
 import PatientAvailabilityPage from './pages/patient/PatientAvailabilityPage';
+import PatientOrdersPage from './pages/patient/PatientOrdersPage';
 import PatientChatPage from './pages/patient/PatientChatPage';
 import PatientAccountPage from './pages/patient/PatientAccountPage';
 import PatientAboutPage from './pages/patient/PatientAboutPage';
@@ -69,6 +70,7 @@ export default function App() {
             <Route element={<ProtectedRoute role={ROLES.PATIENT} />}>
               <Route element={<Layout />}>
                 <Route path="/patient/availability" element={<PatientAvailabilityPage />} />
+                <Route path="/patient/orders" element={<PatientOrdersPage />} />
                 <Route path="/patient/chat" element={<PatientChatPage />} />
                 <Route path="/patient/about" element={<PatientAboutPage />} />
                 <Route path="/patient/account" element={<PatientAccountPage />} />

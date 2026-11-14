@@ -191,7 +191,8 @@ export async function sendTextMessage(sessionId, sender, text) {
 const STORED_NAME_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(png|jpg|gif|webp)$/;
 
 // Full path of a stored image, or null when the name is not one we create.
-function storedImagePath(storedName) {
+// Also used for prescription photos (preorderService.js), which are stored the same way.
+export function storedImagePath(storedName) {
   if (!STORED_NAME_PATTERN.test(String(storedName))) {
     return null;
   }
@@ -236,7 +237,24 @@ export async function sendImageMessage(session, sender, file, caption) {
   // 1. The caption is optional, but has the same length limit as a message
   const cleanCaption = checkMessageText(caption, { allowEmpty: true });
 
-  // 2. There must be a file
+  // 2. Check the file and save it in the uploads folder
+  const image = await storeUploadedImage(file);
+
+  // 3. Save the message. If that fails, remove the file again so no orphan is left behind.
+  try {
+    return await saveMessage(session, sender, cleanCaption, image);
+  } catch (error) {
+    await deleteStoredImage(image.path).catch(() => {});
+    throw error;
+  }
+}
+
+// Checks an uploaded image and saves it in the uploads folder under a new random name.
+// `file` is the upload from multer: { buffer, originalname }.
+// Returns { path, mime, size, name } where `path` is the stored file's name.
+// Used for chat images and for the prescription photo of an order (preorderService.js).
+export async function storeUploadedImage(file) {
+  // 1. There must be a file, and not too big
   if (!file || !file.buffer || file.buffer.length === 0) {
     throw createError(400, 'Choose an image to send', { code: ERROR_CODES.ATTACHMENT_MISSING });
   }
@@ -247,29 +265,23 @@ export async function sendImageMessage(session, sender, file, caption) {
     });
   }
 
-  // 3. It must really be a PNG, JPEG, WebP or GIF (SVG and text files are never accepted)
+  // 2. It must really be a PNG, JPEG, WebP or GIF (SVG and text files are never accepted)
   const detectedType = await fileTypeFromBuffer(file.buffer);
   if (!detectedType || !CHAT_IMAGE_TYPES.includes(detectedType.mime)) {
     throw createError(415, 'Only image files can be sent', { code: ERROR_CODES.ATTACHMENT_TYPE });
   }
 
-  // 4. Save it under a new random name ('wx' = never overwrite an existing file)
+  // 3. Save it under a new random name ('wx' = never overwrite an existing file)
   const storedName = `${crypto.randomUUID()}.${detectedType.ext}`;
   ensureUploadsFolder();
   await fs.promises.writeFile(storedImagePath(storedName), file.buffer, { flag: 'wx' });
 
-  // 5. Save the message. If that fails, remove the file again so no orphan is left behind.
-  try {
-    return await saveMessage(session, sender, cleanCaption, {
-      path: storedName,
-      mime: detectedType.mime,
-      size: file.buffer.length,
-      name: makeDisplayName(file.originalname, detectedType.ext),
-    });
-  } catch (error) {
-    await deleteStoredImage(storedName).catch(() => {});
-    throw error;
-  }
+  return {
+    path: storedName,
+    mime: detectedType.mime,
+    size: file.buffer.length,
+    name: makeDisplayName(file.originalname, detectedType.ext),
+  };
 }
 
 // Finds a stored image for download, after checking `user` may see that conversation.
