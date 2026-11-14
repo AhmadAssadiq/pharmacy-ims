@@ -94,12 +94,13 @@ CREATE TABLE IF NOT EXISTS chat_sessions (
   CONSTRAINT fk_chat_sessions_staff   FOREIGN KEY (staff_id)   REFERENCES users (id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
--- Persisted chat log (FR 5.1). A message is text, an image, or an image with
--- a caption. content stays NOT NULL: an image-only message stores '' and the
--- rule "text or an image" is enforced in services/chatService.js. The
--- image itself is a file on disk; attachment_path holds only its generated
--- name (never the client's filename), and attachment_name a sanitised copy of
--- the original name for the download header (GP2 addition).
+-- Persisted chat log (FR 5.1). A message is text, an image, an image with a
+-- caption, or a voice message. content stays NOT NULL: an image-only or voice
+-- message stores '' and the rule "text or an attachment" is enforced in
+-- services/chatService.js. The image or recording itself is a file on disk;
+-- attachment_path holds only its generated name (never the client's filename),
+-- attachment_mime its type (image/... or audio/...), and attachment_name a
+-- sanitised name for the download header (GP2 additions).
 CREATE TABLE IF NOT EXISTS chat_messages (
   id              INT UNSIGNED NOT NULL AUTO_INCREMENT,
   chat_session_id INT UNSIGNED NOT NULL,

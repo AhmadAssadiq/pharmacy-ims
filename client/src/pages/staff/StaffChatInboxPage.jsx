@@ -1,7 +1,7 @@
 // The staff chat inbox (FR 5.2): every patient conversation in one list, and the chosen
 // conversation next to it. New messages and online dots update live, without refreshing.
 import { useEffect, useState } from 'react';
-import { fetchMessages, fetchSessions, postImage, postMessage } from '../../api/chat';
+import { fetchMessages, fetchSessions, postImage, postMessage, postVoice } from '../../api/chat';
 import ChatWindow, { PresenceMark } from '../../components/chat/ChatWindow';
 import PhoneLink from '../../components/PhoneLink';
 import { useAuth } from '../../context/AuthContext';
@@ -73,7 +73,9 @@ export default function StaffChatInboxPage() {
         staff_id: session.staff_id,
         staff_name: existing ? existing.staff_name : undefined,
         last_message: message.content,
-        last_message_has_image: Boolean(message.attachment),
+        // An attachment is either a voice message (audio/...) or an image
+        last_message_has_image: Boolean(message.attachment) && !message.attachment.mime.startsWith('audio/'),
+        last_message_is_voice: Boolean(message.attachment) && message.attachment.mime.startsWith('audio/'),
         last_message_at: message.timestamp,
       };
       return [updated, ...others];
@@ -121,6 +123,12 @@ export default function StaffChatInboxPage() {
     setMessages((current) => addMessageIfNew(current, result.message));
   }
 
+  // Voice messages also go through the normal API. `recording` is the recorded audio.
+  async function handleSendVoice(recording) {
+    const result = await postVoice(selectedId, recording);
+    setMessages((current) => addMessageIfNew(current, result.message));
+  }
+
   // A patient counts as online only while our own connection is up
   function isOnline(patientId) {
     return status === 'online' && Boolean(onlinePatients[patientId]);
@@ -137,6 +145,9 @@ export default function StaffChatInboxPage() {
     }
     if (session.last_message_has_image) {
       return t('chat.imagePreview');
+    }
+    if (session.last_message_is_voice) {
+      return t('chat.voicePreview');
     }
     return t('chat.noMessagesYet');
   }
@@ -196,6 +207,7 @@ export default function StaffChatInboxPage() {
             currentUserId={user.id}
             onSend={handleSend}
             onSendImage={handleSendImage}
+            onSendVoice={handleSendVoice}
             status={status}
             loading={loadingMessages}
           />

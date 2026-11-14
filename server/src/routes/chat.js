@@ -5,7 +5,7 @@ import express from 'express';
 import multer from 'multer';
 import createError from 'http-errors';
 import contentDisposition from 'content-disposition';
-import { ROLES, ERROR_CODES, CHAT_IMAGE_MAX_BYTES } from '../constants.js';
+import { ROLES, ERROR_CODES, CHAT_IMAGE_MAX_BYTES, CHAT_VOICE_MAX_BYTES } from '../constants.js';
 import { requireLogin, requireRole } from '../middleware/auth.js';
 import { parseId } from '../utils/parseId.js';
 import * as chatService from '../services/chatService.js';
@@ -38,6 +38,25 @@ function receiveImage(req, res, next) {
       );
     }
     return next(createError(400, 'Send one image as the "image" field', { code: ERROR_CODES.ATTACHMENT_MISSING }));
+  });
+}
+
+// The same for a voice message: the "voice" field of a multipart form, at most one 3 MB file.
+const uploadOneVoice = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: CHAT_VOICE_MAX_BYTES, files: 1, fields: 0, parts: 1 },
+}).single('voice');
+
+// Middleware: runs multer for a voice message and turns its errors into the app's error format.
+function receiveVoice(req, res, next) {
+  uploadOneVoice(req, res, (error) => {
+    if (!error) {
+      return next();
+    }
+    if (error.code === 'LIMIT_FILE_SIZE') {
+      return next(createError(413, 'Voice message is too long', { code: ERROR_CODES.VOICE_TOO_LARGE }));
+    }
+    return next(createError(400, 'Send one recording as the "voice" field', { code: ERROR_CODES.ATTACHMENT_MISSING }));
   });
 }
 
@@ -87,8 +106,16 @@ router.post('/sessions/:id/attachments', loadAccessibleSession, receiveImage, as
   res.status(201).json({ message: result.message });
 });
 
-// GET /api/chat/attachments/<stored name> - download an image (access is checked every time).
-// The headers make sure the browser only ever treats it as an image, and let it cache it.
+// POST /api/chat/sessions/4/voice - send a voice message (multipart form: voice)
+router.post('/sessions/:id/voice', loadAccessibleSession, receiveVoice, async (req, res) => {
+  const result = await chatService.sendVoiceMessage(req.chatSession, req.user, req.file);
+  publishMessage(result);
+  res.status(201).json({ message: result.message });
+});
+
+// GET /api/chat/attachments/<stored name> - download an image or a voice message (access is
+// checked every time). The headers make sure the browser only ever treats it as the type
+// we stored, and let it cache it.
 router.get('/attachments/:key', async (req, res, next) => {
   const image = await chatService.getImageForDownload(req.params.key, req.user);
   res.set({

@@ -16,4 +16,12 @@ export const postImage = (sessionId, file, caption) => {
   return request(`/chat/sessions/${sessionId}/attachments`, { method: 'POST', body: form });
 };
 
+/** A voice message: the recording (a Blob from the browser's recorder), as multipart form data. */
+export const postVoice = (sessionId, recording) => {
+  const form = new FormData();
+  form.append('voice', recording, 'voice-message');
+  return request(`/chat/sessions/${sessionId}/voice`, { method: 'POST', body: form });
+};
+
+/** Downloads an image or a voice message of a chat (it needs the login token, so it comes as a Blob). */
 export const fetchAttachment = (key) => fetchBlob(`/chat/attachments/${encodeURIComponent(key)}`);

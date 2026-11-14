@@ -347,7 +347,20 @@
     "noMessagesYet": "No messages yet",
     "assigned": "Assigned",
     "unassigned": "Unassigned",
-    "selectPatient": "Select a patient to view the conversation."
+    "selectPatient": "Select a patient to view the conversation.",
+    "recordVoice": "Hold to record a voice message",
+    "recording": "Recording {time}",
+    "recordingHint": "Let go to stop. You can listen to it before sending.",
+    "voiceReady": "Your voice message, ready to send",
+    "sendVoice": "Send voice message",
+    "discardVoice": "Discard",
+    "voiceTooShort": "Hold the microphone button while you speak, then let go.",
+    "micDenied": "The microphone could not be used. Allow it in your browser to record a voice message.",
+    "voicePreview": "Voice message",
+    "voiceLoading": "Loading voice message...",
+    "voiceLoadFailed": "This voice message could not be loaded.",
+    "voiceLabel": "Voice message from {name}",
+    "voiceLabelMine": "Voice message you sent"
   },
   "availability": {
     "title": "Medications",
@@ -524,7 +537,9 @@
     "PREORDER_STOCK_SHORT": "Not enough {name} in stock for this order ({count} of {needed}). Receive stock first.",
     "PRESCRIPTION_REQUIRED": "This order needs a photo of the prescription.",
     "PRESCRIPTION_NOT_APPROVED": "Check the prescription before marking this order ready.",
-    "PRESCRIPTION_NOT_WAITING": "This prescription has already been checked. Refresh the page."
+    "PRESCRIPTION_NOT_WAITING": "This prescription has already been checked. Refresh the page.",
+    "VOICE_TYPE": "Only voice recordings can be sent.",
+    "VOICE_TOO_LARGE": "That voice message is too long. Record a shorter one."
   },
   "alternatives": {
     "title": "In stock instead:",

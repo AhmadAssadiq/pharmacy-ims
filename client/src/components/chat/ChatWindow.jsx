@@ -1,9 +1,13 @@
 // The chat box used by both the patient chat page and the staff inbox: the list of messages
 // and the box to type in. It can also attach one image (GP2 addition); the image is checked
 // here for type and size first, but the server makes the final decision.
+// It can also record a voice message (GP2 addition): hold the microphone button to record,
+// let go to stop, then listen to it and choose Send or Discard.
 // Message bubbles use flex start/end, so mine and theirs swap sides in Arabic.
 import { useEffect, useId, useRef, useState } from 'react';
 import { useI18n } from '../../i18n/useI18n';
+import useVoiceRecorder from '../../hooks/useVoiceRecorder';
+import ChatAudio from './ChatAudio';
 import ChatImage from './ChatImage';
 import constants from '../../../../shared/constants.json';
 
@@ -36,11 +40,14 @@ export default function ChatWindow({
   currentUserId,
   onSend,
   onSendImage,
+  onSendVoice,
   status,
   loading,
   error,
+  notice,
 }) {
   const { t, te, formatDateTime } = useI18n();
+  const voice = useVoiceRecorder();
   const [draft, setDraft] = useState('');
   const [image, setImage] = useState(null); // { file, previewUrl }
   const [sendError, setSendError] = useState(null);
@@ -96,6 +103,47 @@ export default function ChatWindow({
     }
   };
 
+  // ---- Voice message ----
+
+  // Mouse or finger pressed on the microphone button: start recording. "Capturing" the
+  // pointer means we still hear about the release if it happens outside the button.
+  const handleMicDown = (e) => {
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    setSendError(null);
+    voice.start();
+  };
+
+  // Released: stop recording (the recording then appears in the preview strip)
+  const handleMicUp = () => voice.stop();
+
+  // Keyboard: Space or Enter starts recording, pressing it again stops
+  const handleMicKey = (e) => {
+    if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) {
+      e.preventDefault();
+      if (voice.isRecording) voice.stop();
+      else voice.start();
+    }
+  };
+
+  // "Send" on the preview strip
+  const handleSendVoice = async () => {
+    setSending(true);
+    setSendError(null);
+    try {
+      await onSendVoice(voice.recording.blob);
+      voice.discard();
+    } catch (err) {
+      setSendError(te(err));
+    } finally {
+      setSending(false);
+    }
+  };
+
+  // 75 seconds -> "1:15"
+  const formatSeconds = (total) => `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+
+  const canRecord = Boolean(onSendVoice) && voice.isSupported;
+
   const connectionNote =
     status === 'online' ? null : status === 'connecting' ? t('chat.connecting') : t('chat.reconnecting');
 
@@ -123,7 +171,14 @@ export default function ChatWindow({
           const mine = m.sender_id === currentUserId;
           return (
             <div key={m.id ?? m.clientId} className={`chat-bubble ${mine ? 'chat-bubble--mine' : ''}`}>
-              {m.attachment && (
+              {/* A voice message is played; any other attachment is an image */}
+              {m.attachment && m.attachment.mime.startsWith('audio/') && (
+                <ChatAudio
+                  attachment={m.attachment}
+                  label={mine ? t('chat.voiceLabelMine') : t('chat.voiceLabel', { name: m.sender_name })}
+                />
+              )}
+              {m.attachment && !m.attachment.mime.startsWith('audio/') && (
                 <ChatImage
                   attachment={m.attachment}
                   alt={mine ? t('chat.imageAltMine') : t('chat.imageAlt', { name: m.sender_name })}
@@ -140,7 +195,34 @@ export default function ChatWindow({
         <div ref={bottomRef} />
       </div>
 
+      {notice}
       {sendError && <div className="alert alert--error" role="alert">{sendError}</div>}
+
+      {/* Voice message: what is happening, then the recording to listen to before sending */}
+      {voice.problem && (
+        <p className="chat-window__connection" role="status">
+          {t(voice.problem === 'denied' ? 'chat.micDenied' : 'chat.voiceTooShort')}
+        </p>
+      )}
+      {voice.isRecording && (
+        <div className="chat-composer__preview chat-voice" role="status">
+          <span className="chat-voice__dot" aria-hidden="true" />
+          <span>{t('chat.recording', { time: formatSeconds(voice.seconds) })}</span>
+          <span className="muted">{t('chat.recordingHint')}</span>
+        </div>
+      )}
+      {voice.recording && (
+        <div className="chat-composer__preview chat-voice">
+          <audio controls src={voice.recording.url} aria-label={t('chat.voiceReady')} />
+          <button type="button" className="btn btn--sm btn--primary" onClick={handleSendVoice} disabled={sending}>
+            {sending ? t('chat.sending') : t('chat.sendVoice')}
+          </button>
+          <button type="button" className="btn btn--sm btn--ghost" onClick={voice.discard} disabled={sending}>
+            {t('chat.discardVoice')}
+          </button>
+        </div>
+      )}
+
       {image && (
         <div className="chat-composer__preview">
           <img src={image.previewUrl} alt={t('chat.selectedImage')} />
@@ -171,6 +253,27 @@ export default function ChatWindow({
               <span className="sr-only">{t('chat.attachImage')}</span>
             </label>
           </>
+        )}
+        {canRecord && (
+          <button
+            type="button"
+            className={`btn btn--icon chat-window__mic ${voice.isRecording ? 'is-recording' : ''}`}
+            onPointerDown={handleMicDown}
+            onPointerUp={handleMicUp}
+            onPointerCancel={handleMicUp}
+            onKeyDown={handleMicKey}
+            onContextMenu={(e) => e.preventDefault()}
+            title={t('chat.recordVoice')}
+            aria-pressed={voice.isRecording}
+            disabled={sending || Boolean(voice.recording)}
+          >
+            {/* A microphone */}
+            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+              <rect x="5.75" y="1.75" width="4.5" height="8" rx="2.25" fill="none" stroke="currentColor" strokeWidth="1.5" />
+              <path d="M3.5 7.5a4.5 4.5 0 0 0 9 0M8 12v2.25M5.5 14.25h5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+            <span className="sr-only">{t('chat.recordVoice')}</span>
+          </button>
         )}
         <input
           value={draft}

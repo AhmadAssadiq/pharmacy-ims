@@ -2,7 +2,7 @@
 // The patient has one conversation; it is opened (or created) when the page loads.
 // New messages arrive live over the chat connection (hooks/useChatSocket.js).
 import { useEffect, useState } from 'react';
-import { fetchMessages, openMySession, postImage, postMessage } from '../../api/chat';
+import { fetchMessages, openMySession, postImage, postMessage, postVoice } from '../../api/chat';
 import ChatWindow from '../../components/chat/ChatWindow';
 import { useAuth } from '../../context/AuthContext';
 import useChatSocket, { addMessageIfNew } from '../../hooks/useChatSocket';
@@ -65,6 +65,12 @@ export default function PatientChatPage() {
     setMessages((current) => addMessageIfNew(current, result.message));
   }
 
+  // Voice messages also go through the normal API. `recording` is the recorded audio.
+  async function handleSendVoice(recording) {
+    const result = await postVoice(session.id, recording);
+    setMessages((current) => addMessageIfNew(current, result.message));
+  }
+
   // While our own connection is down we do not know if the pharmacy is online
   const isKnown = status === 'online' && pharmacyOnline !== null;
   let presenceLabel = t('presence.unknown');
@@ -85,6 +91,7 @@ export default function PatientChatPage() {
         currentUserId={user.id}
         onSend={handleSend}
         onSendImage={handleSendImage}
+        onSendVoice={handleSendVoice}
         status={status}
         loading={loading}
         error={error}

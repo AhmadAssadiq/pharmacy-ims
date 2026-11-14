@@ -1282,3 +1282,22 @@ input[aria-invalid='true'], select[aria-invalid='true'] { border-color: var(--ne
 /* A prescription photo */
 .prescription-image { display: block; margin: 8px 0; }
 .prescription-image img { max-width: 100%; max-height: 320px; border: 1px solid var(--rule); border-radius: 6px; }
+
+/* ---- Voice messages (GP2 addition) ---- */
+
+/* The microphone button turns red while recording */
+.chat-window__mic.is-recording { color: var(--negative); border-color: var(--negative); }
+.chat-window__mic { touch-action: none; user-select: none; }
+
+/* The strip above the message box: "Recording 0:07", then the recording with Send / Discard */
+.chat-voice { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.chat-voice audio { height: 36px; max-width: 100%; }
+.chat-voice__dot {
+  width: 10px; height: 10px; border-radius: 50%; background: var(--negative);
+  animation: voice-blink 1s ease-in-out infinite;
+}
+@keyframes voice-blink { 50% { opacity: 0.25; } }
+@media (prefers-reduced-motion: reduce) { .chat-voice__dot { animation: none; } }
+
+/* A voice message inside a chat bubble */
+.chat-audio { display: block; height: 40px; max-width: 100%; }

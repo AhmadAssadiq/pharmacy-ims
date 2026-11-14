@@ -3,9 +3,10 @@
 // - Each patient has one chat session with the pharmacy, created the first time they open the chat.
 // - Every message is saved in chat_messages. The live delivery to the other person happens
 //   in socket/chatSocket.js.
-// - A message can be text, an image, or an image with a caption (images are a GP2 addition).
-//   Images are saved as files in the uploads folder under a random name, and can only be
-//   downloaded through the logged-in route, which checks access every time.
+// - A message can be text, an image, an image with a caption, or a voice message (images
+//   and voice messages are GP2 additions). Images and recordings are saved as files in the
+//   uploads folder under a random name, and can only be downloaded through the logged-in
+//   route, which checks access every time.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -13,7 +14,14 @@ import createError from 'http-errors';
 import { fileTypeFromBuffer } from 'file-type';
 import { db } from '../db.js';
 import { config } from '../config.js';
-import { ROLES, ERROR_CODES, CHAT_MESSAGE_MAX_LENGTH, CHAT_IMAGE_MAX_BYTES, CHAT_IMAGE_TYPES } from '../constants.js';
+import {
+  ROLES,
+  ERROR_CODES,
+  CHAT_MESSAGE_MAX_LENGTH,
+  CHAT_IMAGE_MAX_BYTES,
+  CHAT_IMAGE_TYPES,
+  CHAT_VOICE_MAX_BYTES,
+} from '../constants.js';
 
 // ----------------------------------------------------------------------------
 // Sessions
@@ -47,7 +55,8 @@ export async function getAllSessions() {
     `SELECT s.id, s.patient_id, p.name AS patient_name, p.phone AS patient_phone,
             s.staff_id, st.name AS staff_name, s.created_at,
             m.content AS last_message,
-            m.attachment_mime IS NOT NULL AS last_message_has_image,
+            COALESCE(m.attachment_mime LIKE 'image/%', 0) AS last_message_has_image,
+            COALESCE(m.attachment_mime LIKE 'audio/%', 0) AS last_message_is_voice,
             m.timestamp AS last_message_at
      FROM chat_sessions s
      JOIN users p ON p.id = s.patient_id
@@ -186,9 +195,11 @@ export async function sendTextMessage(sessionId, sender, text) {
 // Images (GP2 addition)
 // ----------------------------------------------------------------------------
 
-// Stored file names look like "<random uuid>.png". Anything else is refused before it is
-// joined to the folder path, so a tampered name can never point outside the uploads folder.
-const STORED_NAME_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(png|jpg|gif|webp)$/;
+// Stored file names look like "<random uuid>.png" (images) or "<random uuid>.webm" (voice
+// messages). Anything else is refused before it is joined to the folder path, so a
+// tampered name can never point outside the uploads folder.
+const STORED_NAME_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(png|jpg|gif|webp|webm|ogg|m4a)$/;
 
 // Full path of a stored image, or null when the name is not one we create.
 // Also used for prescription photos (preorderService.js), which are stored the same way.
@@ -284,7 +295,73 @@ export async function storeUploadedImage(file) {
   };
 }
 
-// Finds a stored image for download, after checking `user` may see that conversation.
+// ----------------------------------------------------------------------------
+// Voice messages (GP2 addition)
+// ----------------------------------------------------------------------------
+
+// What a browser's recorder produces, by the file type the file-type library detects:
+// Chrome and Edge record WebM, Firefox records Ogg (Opus), Safari records MP4 audio.
+// Each is saved with one fixed extension and sent back with an audio/... type.
+// (file-type reports a WebM file as "video/webm" because the same container can hold
+// video too; we only ever store and serve it as audio.)
+const VOICE_TYPES = {
+  webm: { extension: 'webm', mime: 'audio/webm' },
+  opus: { extension: 'ogg', mime: 'audio/ogg' },
+  ogg: { extension: 'ogg', mime: 'audio/ogg' },
+  oga: { extension: 'ogg', mime: 'audio/ogg' },
+  m4a: { extension: 'm4a', mime: 'audio/mp4' },
+  mp4: { extension: 'm4a', mime: 'audio/mp4' },
+};
+
+// Works out which kind of recording `buffer` is, from its actual bytes.
+// Returns { extension, mime }, or null when it is not a recording we accept.
+export async function detectVoiceType(buffer) {
+  const detectedType = await fileTypeFromBuffer(buffer);
+  if (!detectedType) {
+    return null;
+  }
+  return VOICE_TYPES[detectedType.ext] || null;
+}
+
+// Sends a voice message. `file` is the upload from multer: { buffer }.
+// Like an image, the recording's type is decided by its bytes and it is saved under a new
+// random name. A voice message has no text. Returns { message, session } (see saveMessage).
+export async function sendVoiceMessage(session, sender, file) {
+  // 1. There must be a recording, and not too big
+  if (!file || !file.buffer || file.buffer.length === 0) {
+    throw createError(400, 'Record a voice message to send', { code: ERROR_CODES.ATTACHMENT_MISSING });
+  }
+  if (file.buffer.length > CHAT_VOICE_MAX_BYTES) {
+    throw createError(413, 'Voice message is too long', { code: ERROR_CODES.VOICE_TOO_LARGE });
+  }
+
+  // 2. It must really be an audio recording
+  const voiceType = await detectVoiceType(file.buffer);
+  if (!voiceType) {
+    throw createError(415, 'Only voice recordings can be sent', { code: ERROR_CODES.VOICE_TYPE });
+  }
+
+  // 3. Save it under a new random name ('wx' = never overwrite an existing file)
+  const storedName = `${crypto.randomUUID()}.${voiceType.extension}`;
+  ensureUploadsFolder();
+  await fs.promises.writeFile(storedImagePath(storedName), file.buffer, { flag: 'wx' });
+
+  // 4. Save the message. If that fails, remove the file again so no orphan is left behind.
+  try {
+    return await saveMessage(session, sender, '', {
+      path: storedName,
+      mime: voiceType.mime,
+      size: file.buffer.length,
+      name: `voice-message.${voiceType.extension}`,
+    });
+  } catch (error) {
+    await deleteStoredImage(storedName).catch(() => {});
+    throw error;
+  }
+}
+
+// Finds a stored image or voice message for download, after checking `user` may see that
+// conversation.
 // Returns { filePath, mime, name }, or throws 404 / 403.
 export async function getImageForDownload(storedName, user) {
   const notFound = createError(404, 'Attachment not found', { code: ERROR_CODES.ATTACHMENT_NOT_FOUND });

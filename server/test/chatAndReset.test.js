@@ -1,7 +1,7 @@
-// Tests for chat image checks and password reset emails (GP2 additions).
+// Tests for chat image and voice message checks and password reset emails (GP2 additions).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { sendImageMessage, makeDisplayName } from '../src/services/chatService.js';
+import { sendImageMessage, makeDisplayName, detectVoiceType } from '../src/services/chatService.js';
 import { buildResetEmail, resetPassword } from '../src/services/passwordResetService.js';
 
 // The first bytes of real image files (enough for the file-type library to recognise them)
@@ -73,4 +73,30 @@ test('a badly formed reset token is reported as an invalid link', async () => {
     code: 'RESET_TOKEN_INVALID',
   });
   await assert.rejects(resetPassword(undefined), { code: 'RESET_TOKEN_INVALID' });
+});
+
+// ---- voice messages (GP2 addition) ----
+
+test('a voice recording is recognised by its bytes, whichever browser made it', async () => {
+  // Chrome and Edge: a WebM file (it starts with an EBML header naming the "webm" type)
+  const webm = Buffer.from([
+    0x1a, 0x45, 0xdf, 0xa3, 0x9f, 0x42, 0x86, 0x81, 0x01, 0x42, 0xf7, 0x81, 0x01, 0x42, 0xf2, 0x81, 0x04, 0x42, 0xf3,
+    0x81, 0x08, 0x42, 0x82, 0x84, 0x77, 0x65, 0x62, 0x6d, 0x42, 0x87, 0x81, 0x04, 0x42, 0x85, 0x81, 0x02, 0x18, 0x53,
+    0x80, 0x67,
+  ]);
+  assert.deepEqual(await detectVoiceType(webm), { extension: 'webm', mime: 'audio/webm' });
+
+  // Firefox: an Ogg file holding Opus audio
+  const ogg = Buffer.concat([Buffer.from('OggS'), Buffer.alloc(24), Buffer.from('OpusHead'), Buffer.alloc(20)]);
+  assert.deepEqual(await detectVoiceType(ogg), { extension: 'ogg', mime: 'audio/ogg' });
+
+  // Safari: MP4 audio
+  const m4a = Buffer.concat([Buffer.from([0, 0, 0, 0x1c]), Buffer.from('ftypM4A '), Buffer.alloc(16)]);
+  assert.deepEqual(await detectVoiceType(m4a), { extension: 'm4a', mime: 'audio/mp4' });
+});
+
+test('anything that is not a recording is refused as a voice message', async () => {
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+  assert.equal(await detectVoiceType(png), null);
+  assert.equal(await detectVoiceType(Buffer.from('just some text')), null);
 });
