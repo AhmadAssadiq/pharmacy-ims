@@ -165,7 +165,10 @@
     "openingNote": "Stock is tracked per lot so each delivery keeps its own expiry date. More lots can be added afterwards.",
     "quantityInStock": "Quantity in stock",
     "saveChanges": "Save changes",
-    "add": "Add medication"
+    "add": "Add medication",
+    "activeIngredient": "Active ingredient",
+    "activeIngredientHint": "The active ingredient is the chemical in the medication, for example Paracetamol. It is used to suggest alternatives and to check for interactions.",
+    "prescriptionOnly": "Prescription-only (a prescription is needed to buy it)"
   },
   "stock": {
     "title": "Add stock",

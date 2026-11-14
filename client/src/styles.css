@@ -1231,3 +1231,7 @@ input[aria-invalid='true'], select[aria-invalid='true'] { border-color: var(--ne
 @media (max-width: 1100px) {
   .med-sub--fold { display: block; }
 }
+
+/* A tick box with its label next to it (e.g. "Prescription-only" on the medication form) */
+.check { display: flex; align-items: center; gap: 8px; margin: 12px 0; font-weight: 500; }
+.check input { width: auto; min-height: 0; }

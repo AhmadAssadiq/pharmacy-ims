@@ -34,6 +34,10 @@ Steps, all printed as they run:
    and seasons continue smoothly. The app reads the file by calendar date, so
    its 2022-2025 history is the cleaned source data itself.
 
+The source holds only ten medicines. Five more in the demo catalogue (the last five in
+PROFILES below) are DERIVED: each has its own volume, growth and seasons, and borrows the
+day-to-day variation of the closest source medicine (its "source"), with its own random seed.
+
 pandas does the cleaning (steps 1-4); the rest is plain Python.
 """
 from __future__ import annotations
@@ -60,6 +64,10 @@ WEEKDAY = [1.05, 1.00, 1.00, 1.05, 1.15, 0.65, 0.85]
 # avg: units per day on an average day at the start of 2022.
 # growth: change in demand per year.
 # season: January .. December multipliers (rescaled to average 1).
+# source: only for medicines that are NOT in the Kaggle file - the Kaggle medicine whose
+#         day-to-day variation they borrow.
+# New medicines must be added at the END: each series' random seed is SEED + its position,
+# so adding at the end leaves every earlier series exactly as it was.
 PROFILES = {
     "Paracetamol": {"avg": 14, "growth": 0.00,
                     "season": [1.25, 1.20, 1.05, 0.95, 0.90, 0.88, 0.90, 0.90, 0.92, 1.00, 1.10, 1.25]},
@@ -86,6 +94,21 @@ PROFILES = {
     # New-year resolutions and back to school.
     "Multivitamin": {"avg": 3, "growth": 0.03,
                      "season": [1.25, 1.05, 1.00, 0.95, 0.92, 0.88, 0.88, 0.95, 1.15, 1.05, 0.95, 0.97]},
+
+    # ---- Derived series (not in the Kaggle file; see "source") ----
+    # The stronger paracetamol tablet: fewer sold, same winter peak.
+    "Paracetamol 1000": {"avg": 5, "growth": 0.02, "source": "Paracetamol",
+                         "season": [1.25, 1.20, 1.05, 0.95, 0.90, 0.88, 0.90, 0.90, 0.92, 1.00, 1.10, 1.25]},
+    "Ibuprofen 200": {"avg": 3, "growth": 0.00, "source": "Ibuprofen",
+                      "season": [1.15, 1.12, 1.02, 0.97, 0.95, 0.92, 0.92, 0.93, 0.95, 1.00, 1.05, 1.12]},
+    # Another antihistamine: the same spring pollen season as cetirizine.
+    "Loratadine": {"avg": 3, "growth": 0.03, "source": "Cetirizine",
+                   "season": [0.80, 0.90, 1.25, 1.50, 1.45, 1.10, 0.85, 0.75, 0.95, 1.05, 0.85, 0.75]},
+    # Taken every day for the heart: steady all year, like the other chronic medicines.
+    "Aspirin": {"avg": 5, "growth": 0.03, "source": "Amlodipine",
+                "season": [1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00]},
+    "Warfarin": {"avg": 2, "growth": 0.01, "source": "Metformin",
+                 "season": [1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00]},
 }
 
 
@@ -177,8 +200,10 @@ def build(variation: dict[str, dict[date, float]]) -> dict[str, list[int]]:
     n_days = (LAST_DAY - FIRST_DAY).days + 1
     series = {}
     for index, (medicine, profile) in enumerate(PROFILES.items()):
-        if medicine not in variation:
-            raise SystemExit(f"{medicine} is not in the source data")
+        # A derived medicine uses the day-to-day variation of its "source" medicine
+        source = profile.get("source", medicine)
+        if source not in variation:
+            raise SystemExit(f"{source} is not in the source data")
         rng = random.Random(SEED + index)
         values = []
         for offset in range(n_days):
@@ -189,7 +214,7 @@ def build(variation: dict[str, dict[date, float]]) -> dict[str, list[int]]:
                 * (1 + profile["growth"]) ** years
                 * seasonal_factor(profile["season"], day)
                 * WEEKDAY[day.weekday()] / weekday_mean
-                * variation[medicine].get(source_day(day), 1.0)
+                * variation[source].get(source_day(day), 1.0)
             )
             values.append(poisson(rng, expected))
         series[medicine] = values

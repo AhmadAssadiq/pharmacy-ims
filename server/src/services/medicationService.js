@@ -15,7 +15,8 @@ import { todayAsText } from '../utils/dates.js';
 // The SELECT used for every medication read: catalogue columns plus the stock totals of its lots.
 // CASE WHEN ... picks only the lots that match (e.g. not expired) before adding them up.
 const SELECT_MEDICATIONS_WITH_STOCK = `
-  SELECT m.id, m.name, m.category, m.unit_price, m.supplier_info, m.low_stock_threshold,
+  SELECT m.id, m.name, m.category, m.active_ingredient, m.unit_price, m.supplier_info,
+         m.low_stock_threshold, m.requires_prescription, m.is_discontinued,
          COALESCE(SUM(CASE WHEN b.expiry_date >= CURDATE() THEN b.quantity END), 0) AS quantity,
          COALESCE(SUM(CASE WHEN b.expiry_date <  CURDATE() THEN b.quantity END), 0) AS expired_quantity,
          MIN(CASE WHEN b.quantity > 0 AND b.expiry_date >= CURDATE() THEN b.expiry_date END) AS expiry_date
@@ -23,13 +24,16 @@ const SELECT_MEDICATIONS_WITH_STOCK = `
   LEFT JOIN medication_batches b ON b.medication_id = m.id
 `;
 
-// MySQL returns SUM() results as text ('42'), so turn them into numbers.
+// MySQL returns SUM() results as text ('42') and yes/no columns as 1/0,
+// so turn them into numbers and true/false.
 function fixNumberColumns(row) {
   return {
     ...row,
     quantity: Number(row.quantity),
     expired_quantity: Number(row.expired_quantity),
     low_stock_threshold: Number(row.low_stock_threshold),
+    requires_prescription: Boolean(row.requires_prescription),
+    is_discontinued: Boolean(row.is_discontinued),
   };
 }
 
@@ -77,9 +81,18 @@ export async function getMedication(id) {
 export async function addMedication(input) {
   const medicationId = await runInTransaction(async (connection) => {
     const [result] = await connection.query(
-      `INSERT INTO medications (name, category, unit_price, supplier_info, low_stock_threshold)
-       VALUES (?, ?, ?, ?, ?)`,
-      [input.name, input.category, input.unit_price, input.supplier_info, input.low_stock_threshold]
+      `INSERT INTO medications
+         (name, category, active_ingredient, unit_price, supplier_info, low_stock_threshold, requires_prescription)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        input.name,
+        input.category,
+        input.active_ingredient,
+        input.unit_price,
+        input.supplier_info,
+        input.low_stock_threshold,
+        input.requires_prescription ? 1 : 0,
+      ]
     );
     await insertBatch(connection, {
       medication_id: result.insertId,
@@ -99,9 +112,19 @@ export async function updateMedication(id, input) {
   await getMedication(id); // 404 if it does not exist
   await db.query(
     `UPDATE medications
-     SET name = ?, category = ?, unit_price = ?, supplier_info = ?, low_stock_threshold = ?
+     SET name = ?, category = ?, active_ingredient = ?, unit_price = ?, supplier_info = ?,
+         low_stock_threshold = ?, requires_prescription = ?
      WHERE id = ?`,
-    [input.name, input.category, input.unit_price, input.supplier_info, input.low_stock_threshold, id]
+    [
+      input.name,
+      input.category,
+      input.active_ingredient,
+      input.unit_price,
+      input.supplier_info,
+      input.low_stock_threshold,
+      input.requires_prescription ? 1 : 0,
+      id,
+    ]
   );
   return getMedication(id);
 }

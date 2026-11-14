@@ -28,13 +28,21 @@ CREATE TABLE IF NOT EXISTS users (
 
 -- Medication catalog. Stock levels and expiry dates live in medication_batches;
 -- this table holds only catalog data plus the per-medication reorder threshold.
+-- active_ingredient: the chemical in it (e.g. "Paracetamol"). Used to suggest alternatives
+--   and to check for interactions (both GP2 additions).
+-- requires_prescription: 1 for prescription-only medicines such as antibiotics.
+-- is_discontinued: 1 when the pharmacy no longer sells it. It is hidden from patients and
+--   from the Dispense page, but its sales history is kept (GP2 addition).
 CREATE TABLE IF NOT EXISTS medications (
-  id                  INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  name                VARCHAR(150) NOT NULL,
-  category            VARCHAR(100) NOT NULL,
-  unit_price          DECIMAL(10, 2) NOT NULL,
-  supplier_info       VARCHAR(255) NOT NULL,
-  low_stock_threshold INT NOT NULL DEFAULT 10,
+  id                    INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  name                  VARCHAR(150) NOT NULL,
+  category              VARCHAR(100) NOT NULL,
+  active_ingredient     VARCHAR(150) NOT NULL,
+  unit_price            DECIMAL(10, 2) NOT NULL,
+  supplier_info         VARCHAR(255) NOT NULL,
+  low_stock_threshold   INT NOT NULL DEFAULT 10,
+  requires_prescription TINYINT(1) NOT NULL DEFAULT 0,
+  is_discontinued       TINYINT(1) NOT NULL DEFAULT 0,
   PRIMARY KEY (id),
   CONSTRAINT chk_medications_price CHECK (unit_price >= 0),
   CONSTRAINT chk_medications_threshold CHECK (low_stock_threshold >= 0)
@@ -53,6 +61,22 @@ CREATE TABLE IF NOT EXISTS medication_batches (
   KEY idx_medication_batches_medication_expiry (medication_id, expiry_date),
   CONSTRAINT fk_medication_batches_medication FOREIGN KEY (medication_id) REFERENCES medications (id) ON DELETE CASCADE,
   CONSTRAINT chk_medication_batches_quantity CHECK (quantity >= 0)
+) ENGINE=InnoDB;
+
+-- Known negative interactions between two active ingredients (GP2 addition).
+-- Each pair is stored once, in lower case, with ingredient_a before ingredient_b in the
+-- alphabet, so a pair can be found with one lookup whichever way round it is asked.
+-- The descriptions are shown to staff and patients in their own language.
+-- Filled by the seed (db/demoInteractions.js).
+CREATE TABLE IF NOT EXISTS medication_interactions (
+  id             INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  ingredient_a   VARCHAR(150) NOT NULL,
+  ingredient_b   VARCHAR(150) NOT NULL,
+  severity       ENUM('minor', 'moderate', 'major') NOT NULL,
+  description_en VARCHAR(500) NOT NULL,
+  description_ar VARCHAR(500) NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_medication_interactions_pair (ingredient_a, ingredient_b)
 ) ENGINE=InnoDB;
 
 -- One chat session per patient, enforced by the unique key so two racing

@@ -2,7 +2,8 @@
 //   1. two demo accounts (below);
 //   2. the demo medication catalogue with its stock lots (db/demoCatalog.js);
 //   3. the sales history the forecast learns from: daily sales from 1 January 2022 up to
-//      yesterday, from data/demo-sales.json (db/demoSales.js).
+//      yesterday, from data/demo-sales.json (db/demoSales.js);
+//   4. the known interactions between active ingredients (db/demoInteractions.js).
 //
 // Safe to run again: existing accounts are kept, medications are only added when the
 // catalogue is empty, and only the sales history BEFORE today is rebuilt - real sales made
@@ -17,6 +18,8 @@ import { ROLES } from '../constants.js';
 import { todayAsText, addDaysToDate, listDatesBetween } from '../utils/dates.js';
 import { DEMO_MEDICATIONS, sizeStock } from './demoCatalog.js';
 import { DEMO_FIRST_DAY, getDemoUnits, getRecentAverage } from './demoSales.js';
+import { DEMO_INTERACTIONS } from './demoInteractions.js';
+import { sortIngredientPair } from '../utils/ingredients.js';
 import { insertSalesHistoryRows, deleteSalesHistoryBefore } from '../services/salesService.js';
 
 const DEMO_USERS = [
@@ -89,9 +92,18 @@ async function seedMedications() {
     }
 
     const [result] = await db.query(
-      `INSERT INTO medications (name, category, unit_price, supplier_info, low_stock_threshold)
-       VALUES (?, ?, ?, ?, ?)`,
-      [medication.name, medication.category, medication.unit_price, medication.supplier_info, threshold]
+      `INSERT INTO medications
+         (name, category, active_ingredient, unit_price, supplier_info, low_stock_threshold, requires_prescription)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        medication.name,
+        medication.category,
+        medication.active_ingredient,
+        medication.unit_price,
+        medication.supplier_info,
+        threshold,
+        medication.requires_prescription ? 1 : 0,
+      ]
     );
     for (const batch of batches) {
       await db.query(
@@ -170,7 +182,30 @@ async function seedSalesHistory(medications) {
 }
 
 // ----------------------------------------------------------------------------
-// Run the three steps
+// 4. Known interactions between active ingredients
+// ----------------------------------------------------------------------------
+
+async function seedInteractions() {
+  const [existing] = await db.query('SELECT COUNT(*) AS total FROM medication_interactions');
+  if (existing[0].total > 0) {
+    console.log(`  medication_interactions already has ${existing[0].total} rows - skipped`);
+    return;
+  }
+
+  for (const interaction of DEMO_INTERACTIONS) {
+    // Each pair is stored once, in alphabetical order (see schema.sql)
+    const [ingredientA, ingredientB] = sortIngredientPair(interaction.ingredients[0], interaction.ingredients[1]);
+    await db.query(
+      `INSERT INTO medication_interactions (ingredient_a, ingredient_b, severity, description_en, description_ar)
+       VALUES (?, ?, ?, ?, ?)`,
+      [ingredientA, ingredientB, interaction.severity, interaction.en, interaction.ar]
+    );
+  }
+  console.log(`  inserted ${DEMO_INTERACTIONS.length} known interactions`);
+}
+
+// ----------------------------------------------------------------------------
+// Run the four steps
 // ----------------------------------------------------------------------------
 
 try {
@@ -180,6 +215,8 @@ try {
   const medications = await seedMedications();
   console.log('Seeding sales history...');
   await seedSalesHistory(medications);
+  console.log('Seeding known interactions...');
+  await seedInteractions();
 } catch (error) {
   console.error('Seed failed:', error.message);
   process.exitCode = 1;

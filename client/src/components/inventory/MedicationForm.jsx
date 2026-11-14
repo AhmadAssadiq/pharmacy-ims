@@ -11,9 +11,11 @@ import { useI18n } from '../../i18n/useI18n';
 const EMPTY_FORM = {
   name: '',
   category: '',
+  active_ingredient: '',
   unit_price: '',
   supplier_info: '',
   low_stock_threshold: String(constants.LOW_STOCK_THRESHOLD),
+  requires_prescription: false,
   quantity: '',
   expiry_date: '',
   batch_number: '',
@@ -54,9 +56,11 @@ export default function MedicationForm({ initialValue, onSubmit, onCancel, submi
     const details = {
       name: form.name,
       category: form.category,
+      active_ingredient: form.active_ingredient,
       unit_price: form.unit_price,
       supplier_info: form.supplier_info,
       low_stock_threshold: form.low_stock_threshold,
+      requires_prescription: form.requires_prescription,
     };
     if (!isEditing) {
       details.quantity = form.quantity;
@@ -99,10 +103,22 @@ export default function MedicationForm({ initialValue, onSubmit, onCancel, submi
       <div className="form-grid">
         {field('name', t('medicationForm.name'), { required: true, maxLength: 150 })}
         {field('category', t('medicationForm.category'), { required: true, maxLength: 100 })}
+        {field('active_ingredient', t('medicationForm.activeIngredient'), { required: true, maxLength: 150 })}
         {field('unit_price', t('medicationForm.price'), { required: true, type: 'number', min: 0, step: '0.01' })}
         {field('supplier_info', t('medicationForm.supplier'), { required: true, maxLength: 255 })}
         {field('low_stock_threshold', t('medicationForm.threshold'), { required: true, type: 'number', min: 0, step: 1 })}
       </div>
+      <p className="field__hint">{t('medicationForm.activeIngredientHint')}</p>
+
+      {/* Prescription-only medicines (a tick box) */}
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={Boolean(form.requires_prescription)}
+          onChange={(event) => setForm({ ...form, requires_prescription: event.target.checked })}
+        />
+        <span>{t('medicationForm.prescriptionOnly')}</span>
+      </label>
 
       {/* Only when adding: the first stock lot */}
       {!isEditing && (

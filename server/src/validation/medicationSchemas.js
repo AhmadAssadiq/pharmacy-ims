@@ -13,12 +13,15 @@ import {
   wholeNumber,
   optionalWholeNumber,
   requiredDate,
+  yesNoField,
 } from './validate.js';
 
 // The catalogue fields of a medication
 const catalogFields = {
   name: requiredText('Name', 150),
   category: requiredText('Category', 100),
+  // The chemical in it, e.g. "Paracetamol" (used for alternatives and the interaction check)
+  active_ingredient: requiredText('Active ingredient', 150),
   unit_price: priceField('Unit price'),
   supplier_info: requiredText('Supplier information', 255),
   // Optional: when left empty the shared default (10) is used
@@ -30,6 +33,8 @@ const catalogFields = {
       tooSmall: 'Reorder threshold cannot be negative',
     },
   }),
+  // Prescription-only medicines (a tick box; not ticked means no)
+  requires_prescription: yesNoField(),
 };
 
 // The fields of one stock lot

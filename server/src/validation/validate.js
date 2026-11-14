@@ -125,6 +125,15 @@ export function priceField(label) {
   return z.preprocess(toNumberOrMissing, schema);
 }
 
+// A yes/no field (a tick box). true, 'true', 1 and '1' mean yes; anything else,
+// including a field that was not sent at all, means no.
+export function yesNoField() {
+  return z.preprocess(
+    (value) => value === true || value === 'true' || value === 1 || value === '1',
+    z.boolean()
+  );
+}
+
 // True when `text` is a real calendar date written as YYYY-MM-DD (so '2026-02-30' is false).
 export function isRealDate(text) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) {

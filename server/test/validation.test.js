@@ -98,8 +98,22 @@ test('reset password needs a 64-character token and a valid new password', () =>
 
 // ---- medications and stock lots ----
 
-const GOOD_MEDICATION = { name: 'Panadol', category: 'Analgesic', unit_price: '1.5', supplier_info: 'Hikma' };
+const GOOD_MEDICATION = {
+  name: 'Panadol',
+  category: 'Analgesic',
+  active_ingredient: 'Paracetamol',
+  unit_price: '1.5',
+  supplier_info: 'Hikma',
+};
 const GOOD_BATCH = { quantity: '120', expiry_date: '2027-06-30' };
+
+test('the active ingredient is required, and prescription-only is a yes/no that defaults to no', () => {
+  assert.equal(check(medicationSchema, { ...GOOD_MEDICATION, active_ingredient: ' ' }).errors.active_ingredient, 'Active ingredient is required');
+  assert.equal(check(medicationSchema, GOOD_MEDICATION).data.requires_prescription, false);
+  assert.equal(check(medicationSchema, { ...GOOD_MEDICATION, requires_prescription: true }).data.requires_prescription, true);
+  assert.equal(check(medicationSchema, { ...GOOD_MEDICATION, requires_prescription: '1' }).data.requires_prescription, true);
+  assert.equal(check(medicationSchema, { ...GOOD_MEDICATION, requires_prescription: 'no' }).data.requires_prescription, false);
+});
 
 test('a new medication is checked together with its first stock lot, and numbers are converted', () => {
   const { data, errors } = check(newMedicationSchema, { ...GOOD_MEDICATION, ...GOOD_BATCH });
@@ -111,7 +125,7 @@ test('a new medication is checked together with its first stock lot, and numbers
 
 test('every catalogue field from FR 3.1 is required, and stock errors are reported too', () => {
   const { errors } = check(newMedicationSchema, {});
-  for (const field of ['name', 'category', 'unit_price', 'supplier_info', 'quantity', 'expiry_date']) {
+  for (const field of ['name', 'category', 'active_ingredient', 'unit_price', 'supplier_info', 'quantity', 'expiry_date']) {
     assert.ok(errors[field], `${field} should be reported`);
   }
 });
