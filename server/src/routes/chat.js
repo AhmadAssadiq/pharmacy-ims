@@ -9,7 +9,7 @@ import { ROLES, ERROR_CODES, CHAT_IMAGE_MAX_BYTES, CHAT_VOICE_MAX_BYTES } from '
 import { requireLogin, requireRole } from '../middleware/auth.js';
 import { parseId } from '../utils/parseId.js';
 import * as chatService from '../services/chatService.js';
-import { publishMessage, getOnlinePatientIds } from '../socket/chatSocket.js';
+import { publishMessage, getOnlinePatientIds, notifyRoom } from '../socket/chatSocket.js';
 
 const router = express.Router();
 router.use(requireLogin);
@@ -89,6 +89,14 @@ router.get('/sessions', requireRole(ROLES.STAFF), async (req, res) => {
 router.get('/sessions/:id/messages', async (req, res) => {
   const messages = await chatService.getMessages(parseId(req.params.id, 'session'), req.user);
   res.json({ messages });
+});
+
+// POST /api/chat/sessions/4/read - "I have this conversation open": its messages so far
+// stop counting as unread. The bell of the same user (or of all staff) is told to refresh.
+router.post('/sessions/:id/read', async (req, res) => {
+  await chatService.markSessionRead(parseId(req.params.id, 'session'), req.user);
+  notifyRoom(req.user.role === ROLES.STAFF ? 'staff' : `user:${req.user.id}`);
+  res.status(204).end();
 });
 
 // POST /api/chat/sessions/4/messages - send a text message { content }

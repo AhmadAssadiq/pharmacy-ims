@@ -1,11 +1,19 @@
 // The frame around every signed-in page: the top bar with the navigation links for the
-// user's role (staff or patient), the clock, language and theme buttons, the user's name and
-// Log out. The page itself appears where <Outlet /> is.
-import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
+// user's role (staff or patient), the notification bell, the clock, language and theme
+// buttons, the user's name and Log out. The page itself appears where <Outlet /> is.
+//
+// On a phone the links fold away behind a "Menu" button (GP2 addition), so the top bar
+// does not fill the screen.
+// The frame also opens the app's one live connection to the server (SocketProvider), which
+// the bell and the chat pages share.
+import { useEffect, useState } from 'react';
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { SocketProvider } from '../context/SocketContext';
 import { useI18n } from '../i18n/useI18n';
 import { ROLES } from '../utils/routes';
 import Clock from './Clock';
+import NotificationBell from './NotificationBell';
 import ThemeToggle from './ThemeToggle';
 import LanguageToggle from './LanguageToggle';
 
@@ -40,8 +48,16 @@ export default function Layout() {
   const { user, logout } = useAuth();
   const { t } = useI18n();
   const navigate = useNavigate();
+  const location = useLocation();
   const isStaff = user.role === ROLES.STAFF;
   const links = isStaff ? STAFF_LINKS : PATIENT_LINKS;
+  // On a phone: whether the links are showing (the "Menu" button opens and closes them)
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  // Fold the menu away again whenever another page opens
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [location.pathname]);
 
   const handleLogout = () => {
     logout();
@@ -49,54 +65,84 @@ export default function Layout() {
   };
 
   return (
-    <div className="app-shell">
-      <a className="skip-link" href="#main">
-        {t('app.skipToContent')}
-      </a>
-      <header className="topbar">
-        <span className="topbar__brand">
-          <Mark />
-          {t('app.brand')}
-          <span className="topbar__scope">{isStaff ? t('nav.scopeStaff') : t('nav.scopePatient')}</span>
-        </span>
-        <nav className="topbar__nav" aria-label={t('nav.main')}>
-          {links.map((link) => (
-            <NavLink key={link.to} to={link.to} className="topbar__link">
-              {t(link.label)}
-            </NavLink>
-          ))}
-        </nav>
-        <div className="topbar__user">
-          <Clock />
-          <LanguageToggle />
-          <ThemeToggle />
-          {isStaff ? (
-            <span className="topbar__who">
-              <span>{user.name}</span>
-              <span className="topbar__role">{t('nav.roleStaff')}</span>
-            </span>
-          ) : (
-            // A patient's name opens their account page (delete account lives there).
-            <Link to="/patient/account" className="topbar__who topbar__who--link" title={t('account.linkTitle')}>
-              <span><bdi>{user.name}</bdi></span>
-              <span className="topbar__role">{t('account.linkLabel')}</span>
-            </Link>
-          )}
-          <button type="button" className="btn btn--sm" onClick={handleLogout}>
-            {t('nav.logout')}
+    <SocketProvider>
+      <div className="app-shell">
+        <a className="skip-link" href="#main">
+          {t('app.skipToContent')}
+        </a>
+        <header className="topbar">
+          <span className="topbar__brand">
+            <Mark />
+            {t('app.brand')}
+            <span className="topbar__scope">{isStaff ? t('nav.scopeStaff') : t('nav.scopePatient')}</span>
+          </span>
+
+          {/* Only shown on a phone (see styles.css): opens and closes the links below */}
+          <button
+            type="button"
+            className="btn btn--sm topbar__menu"
+            aria-expanded={menuOpen}
+            aria-controls="main-navigation"
+            onClick={() => setMenuOpen(!menuOpen)}
+          >
+            {/* Three lines: the usual "menu" sign */}
+            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+              <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            </svg>
+            {t('nav.menu')}
           </button>
-        </div>
-      </header>
-      <main className="page" id="main">
-        {/* Patients who registered before phone numbers were required are asked for one. */}
-        {!isStaff && !user.phone && (
-          <div className="alert alert--warning phone-banner" role="status">
-            <span>{t('phone.missingBanner')}</span>{' '}
-            <Link to="/patient/account#phone">{t('phone.addNow')}</Link>
+
+          <nav
+            id="main-navigation"
+            className={`topbar__nav ${menuOpen ? 'is-open' : ''}`}
+            aria-label={t('nav.main')}
+          >
+            {links.map((link) => (
+              <NavLink key={link.to} to={link.to} className="topbar__link">
+                {t(link.label)}
+              </NavLink>
+            ))}
+            {/* On a phone the user's name is hidden, so the account page is linked here */}
+            {!isStaff && (
+              <NavLink to="/patient/account" className="topbar__link topbar__link--phone">
+                {t('account.linkLabel')}
+              </NavLink>
+            )}
+          </nav>
+
+          <div className="topbar__user">
+            <NotificationBell />
+            <Clock />
+            <LanguageToggle />
+            <ThemeToggle />
+            {isStaff ? (
+              <span className="topbar__who">
+                <span>{user.name}</span>
+                <span className="topbar__role">{t('nav.roleStaff')}</span>
+              </span>
+            ) : (
+              // A patient's name opens their account page (delete account lives there).
+              <Link to="/patient/account" className="topbar__who topbar__who--link" title={t('account.linkTitle')}>
+                <span><bdi>{user.name}</bdi></span>
+                <span className="topbar__role">{t('account.linkLabel')}</span>
+              </Link>
+            )}
+            <button type="button" className="btn btn--sm" onClick={handleLogout}>
+              {t('nav.logout')}
+            </button>
           </div>
-        )}
-        <Outlet />
-      </main>
-    </div>
+        </header>
+        <main className="page" id="main">
+          {/* Patients who registered before phone numbers were required are asked for one. */}
+          {!isStaff && !user.phone && (
+            <div className="alert alert--warning phone-banner" role="status">
+              <span>{t('phone.missingBanner')}</span>{' '}
+              <Link to="/patient/account#phone">{t('phone.addNow')}</Link>
+            </div>
+          )}
+          <Outlet />
+        </main>
+      </div>
+    </SocketProvider>
   );
 }

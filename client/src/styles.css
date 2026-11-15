@@ -378,22 +378,78 @@ a:hover { color: var(--link-hover); }
 .topbar__who--link:hover { background: var(--raised); }
 .phone-banner { margin-bottom: var(--gap); }
 
-/* Recording a preorder's delivery inside the "Mark ready" dialog. */
-.delivery { border: 0; margin: 0 0 12px; padding: 0; display: grid; gap: 8px; }
-.delivery__choice { display: flex; align-items: center; gap: 8px; font-weight: 500; }
-.delivery__choice input { width: auto; min-height: 0; }
-.delivery__fields { margin-inline-start: 26px; }
 .topbar__who--link:hover .topbar__role { text-decoration: underline; }
+
+/* The "Menu" button and the account link inside the menu: only shown on a phone (below) */
+.topbar__menu { display: none; }
+.topbar__link--phone { display: none; }
+
+/* The notification bell (components/NotificationBell.jsx) */
+.topbar { position: relative; }
+.bell { position: relative; }
+.bell__button { position: relative; }
+/* The red number on the bell */
+.bell__count {
+  position: absolute;
+  top: -4px;
+  inset-inline-end: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--negative);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+}
+/* The list that opens under the bell */
+.bell__panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  inset-inline-end: 0;
+  z-index: 30;
+  width: min(320px, calc(100vw - 32px));
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.16);
+  padding: 12px;
+}
+.bell__title { font-size: var(--fs-body); margin: 0 0 8px; }
+.bell__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.bell__item {
+  display: block;
+  width: 100%;
+  text-align: start;
+  background: none;
+  border: 0;
+  padding: 8px 10px;
+  border-radius: var(--radius-control);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.bell__item:hover { background: var(--raised); }
 
 /* The one destructive card: the edge is the status hue, the rest stays ink. */
 .card--danger { border-color: var(--danger-border); }
 .card--danger h2 { color: var(--negative); }
 .danger-list { margin: 0 0 12px; padding-inline-start: 18px; }
 
+/* On a phone: the links fold away behind the "Menu" button, and open as a list under
+   the top bar (GP2 addition). The bell's list spans the width of the screen. */
 @media (max-width: 720px) {
   .topbar__who { display: none; }
   .topbar__date { display: none; }
-  .topbar__nav { order: 3; width: 100%; }
+  .topbar__menu { display: inline-flex; align-items: center; gap: 6px; }
+  .topbar__nav { display: none; order: 3; width: 100%; flex-direction: column; }
+  .topbar__nav.is-open { display: flex; }
+  .topbar__link--phone { display: inline-flex; }
+  .topbar__user { gap: 6px; }
+  .bell { position: static; }
+  .bell__panel { top: 100%; inset-inline: 12px; width: auto; }
 }
 
 .page {

@@ -4,6 +4,7 @@
 // A second tab holds the chat with Rafiq, the AI assistant (GP2 addition).
 import { useEffect, useState } from 'react';
 import { fetchMessages, openMySession, postImage, postMessage, postVoice } from '../../api/chat';
+import { markChatRead } from '../../api/notifications';
 import AssistantChat from '../../components/chat/AssistantChat';
 import ChatTabs from '../../components/chat/ChatTabs';
 import ChatWindow from '../../components/chat/ChatWindow';
@@ -31,6 +32,8 @@ export default function PatientChatPage() {
         const history = await fetchMessages(opened.session.id);
         setSession(opened.session);
         setMessages(history.messages);
+        // The conversation is on screen now: its messages no longer count as unread
+        markChatRead(opened.session.id).catch(() => {});
       } catch (loadError) {
         setError(loadError);
       } finally {
@@ -48,8 +51,20 @@ export default function PatientChatPage() {
       setPharmacyOnline(event.online);
     } else if (event.type === 'message' && session && event.message.chat_session_id === session.id) {
       setMessages((current) => addMessageIfNew(current, event.message));
+      // A message from the pharmacy that arrives while its tab is open has been seen
+      if (tab === 'pharmacist' && event.message.sender_id !== user.id) {
+        markChatRead(session.id).catch(() => {});
+      }
     }
   }
+
+  // Coming back from the Rafiq tab: the pharmacist's messages are on screen again
+  useEffect(() => {
+    if (tab === 'pharmacist' && session) {
+      markChatRead(session.id).catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
 
   const { status, sendMessage } = useChatSocket(handleEvent);
 

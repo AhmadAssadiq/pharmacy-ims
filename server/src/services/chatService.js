@@ -57,6 +57,9 @@ export async function getAllSessions() {
             m.content AS last_message,
             COALESCE(m.attachment_mime LIKE 'image/%', 0) AS last_message_has_image,
             COALESCE(m.attachment_mime LIKE 'audio/%', 0) AS last_message_is_voice,
+            (SELECT COUNT(*) FROM chat_messages unread
+             WHERE unread.chat_session_id = s.id AND unread.sender_id = s.patient_id
+               AND (s.staff_read_at IS NULL OR unread.timestamp > s.staff_read_at)) AS unread_count,
             m.timestamp AS last_message_at
      FROM chat_sessions s
      JOIN users p ON p.id = s.patient_id
@@ -81,6 +84,18 @@ export async function getAccessibleSession(sessionId, user) {
   if (!isStaff && !isOwnSession) {
     throw createError(403, 'You do not have access to this chat session', { code: ERROR_CODES.CHAT_FORBIDDEN });
   }
+  return session;
+}
+
+// Records that `user` has the conversation open right now, so its messages so far no longer
+// count as unread (GP2 addition, for the notification bell and the inbox).
+// A patient marks their own side; the staff side is shared by all staff (one pharmacy inbox).
+// Returns the session.
+export async function markSessionRead(sessionId, user) {
+  const session = await getAccessibleSession(sessionId, user);
+  const column = user.role === ROLES.STAFF ? 'staff_read_at' : 'patient_read_at';
+  // `column` is one of the two names above, never text from the request
+  await db.query(`UPDATE chat_sessions SET ${column} = NOW(3) WHERE id = ?`, [sessionId]);
   return session;
 }
 

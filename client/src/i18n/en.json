@@ -44,7 +44,8 @@
     "roleStaff": "Staff",
     "rolePatient": "Patient",
     "logout": "Log out",
-    "myOrders": "My orders"
+    "myOrders": "My orders",
+    "menu": "Menu"
   },
   "theme": {
     "label": "Theme: {current}. Switch to {next}",
@@ -360,7 +361,9 @@
     "voiceLoading": "Loading voice message...",
     "voiceLoadFailed": "This voice message could not be loaded.",
     "voiceLabel": "Voice message from {name}",
-    "voiceLabelMine": "Voice message you sent"
+    "voiceLabelMine": "Voice message you sent",
+    "unread_one": "{count} unread message",
+    "unread_other": "{count} unread messages"
   },
   "availability": {
     "title": "Medications",
@@ -373,7 +376,10 @@
     "price": "{price} each",
     "addToOrder": "Add to order",
     "addLabel": "Add {name} to your order",
-    "inOrder": "In your order: {count}"
+    "inOrder": "In your order: {count}",
+    "watch": "Tell me when it's back",
+    "watching": "You will be told when it is back in stock.",
+    "unwatch": "Stop"
   },
   "preorders": {
     "status": {
@@ -671,5 +677,24 @@
     "clearTitle": "Clear your conversation with Rafiq?",
     "clearLead": "Every question and answer in it is deleted. This cannot be undone.",
     "reminderStaff": "Rafiq is an AI and can be wrong. Check anything important against a proper reference; the decision stays with you."
+  },
+  "notifications": {
+    "title": "Notifications",
+    "none": "Nothing new.",
+    "bellLabel_one": "Notifications: {count} new",
+    "bellLabel_other": "Notifications: {count} new",
+    "reorder_alerts_one": "{count} medication needs reordering",
+    "reorder_alerts_other": "{count} medications need reordering",
+    "unread_chats_one": "{count} conversation has new messages",
+    "unread_chats_other": "{count} conversations have new messages",
+    "orders_pending_one": "{count} order is waiting to be prepared",
+    "orders_pending_other": "{count} orders are waiting to be prepared",
+    "unread_messages_one": "{count} new message from the pharmacy",
+    "unread_messages_other": "{count} new messages from the pharmacy",
+    "orders_ready_one": "{count} order is ready to collect",
+    "orders_ready_other": "{count} orders are ready to collect",
+    "orders_rejected_one": "{count} order was cancelled: the prescription was rejected",
+    "orders_rejected_other": "{count} orders were cancelled: the prescription was rejected",
+    "back_in_stock": "Back in stock: {names}"
   }
 }

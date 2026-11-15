@@ -52,7 +52,8 @@
     "roleStaff": "موظف",
     "rolePatient": "مريض",
     "logout": "تسجيل الخروج",
-    "myOrders": "طلباتي"
+    "myOrders": "طلباتي",
+    "menu": "القائمة"
   },
   "theme": {
     "label": "المظهر: {current}. التبديل إلى {next}",
@@ -441,7 +442,13 @@
     "voiceLoading": "جارٍ تحميل الرسالة الصوتية...",
     "voiceLoadFailed": "تعذّر تحميل هذه الرسالة الصوتية.",
     "voiceLabel": "رسالة صوتية من {name}",
-    "voiceLabelMine": "رسالة صوتية أرسلتها"
+    "voiceLabelMine": "رسالة صوتية أرسلتها",
+    "unread_zero": "لا رسائل غير مقروءة",
+    "unread_one": "رسالة واحدة غير مقروءة",
+    "unread_two": "رسالتان غير مقروءتين",
+    "unread_few": "{count} رسائل غير مقروءة",
+    "unread_many": "{count} رسالة غير مقروءة",
+    "unread_other": "{count} رسالة غير مقروءة"
   },
   "availability": {
     "title": "الأدوية",
@@ -454,7 +461,10 @@
     "price": "{price} للوحدة",
     "addToOrder": "أضف إلى الطلب",
     "addLabel": "أضف {name} إلى طلبك",
-    "inOrder": "في طلبك: {count}"
+    "inOrder": "في طلبك: {count}",
+    "watch": "أخبرني عند توفّره",
+    "watching": "سنخبرك عند توفّره مجددًا.",
+    "unwatch": "إيقاف"
   },
   "preorders": {
     "status": {
@@ -782,5 +792,52 @@
     "clearTitle": "مسح محادثتك مع رفيق؟",
     "clearLead": "سيُحذف كل سؤال وجواب فيها. لا يمكن التراجع عن ذلك.",
     "reminderStaff": "رفيق ذكاء اصطناعي وقد يخطئ. تحقّق من كل ما هو مهم في مرجع موثوق؛ والقرار يبقى لك."
+  },
+  "notifications": {
+    "title": "الإشعارات",
+    "none": "لا جديد.",
+    "bellLabel_zero": "الإشعارات",
+    "bellLabel_one": "الإشعارات: إشعار جديد واحد",
+    "bellLabel_two": "الإشعارات: إشعاران جديدان",
+    "bellLabel_few": "الإشعارات: {count} إشعارات جديدة",
+    "bellLabel_many": "الإشعارات: {count} إشعارًا جديدًا",
+    "bellLabel_other": "الإشعارات: {count} إشعار جديد",
+    "reorder_alerts_zero": "لا أدوية تحتاج إلى إعادة طلب",
+    "reorder_alerts_one": "دواء واحد يحتاج إلى إعادة طلب",
+    "reorder_alerts_two": "دواءان يحتاجان إلى إعادة طلب",
+    "reorder_alerts_few": "{count} أدوية تحتاج إلى إعادة طلب",
+    "reorder_alerts_many": "{count} دواءً يحتاج إلى إعادة طلب",
+    "reorder_alerts_other": "{count} دواء يحتاج إلى إعادة طلب",
+    "unread_chats_zero": "لا محادثات فيها رسائل جديدة",
+    "unread_chats_one": "محادثة واحدة فيها رسائل جديدة",
+    "unread_chats_two": "محادثتان فيهما رسائل جديدة",
+    "unread_chats_few": "{count} محادثات فيها رسائل جديدة",
+    "unread_chats_many": "{count} محادثة فيها رسائل جديدة",
+    "unread_chats_other": "{count} محادثة فيها رسائل جديدة",
+    "orders_pending_zero": "لا طلبات بانتظار التحضير",
+    "orders_pending_one": "طلب واحد بانتظار التحضير",
+    "orders_pending_two": "طلبان بانتظار التحضير",
+    "orders_pending_few": "{count} طلبات بانتظار التحضير",
+    "orders_pending_many": "{count} طلبًا بانتظار التحضير",
+    "orders_pending_other": "{count} طلب بانتظار التحضير",
+    "unread_messages_zero": "لا رسائل جديدة من الصيدلية",
+    "unread_messages_one": "رسالة جديدة واحدة من الصيدلية",
+    "unread_messages_two": "رسالتان جديدتان من الصيدلية",
+    "unread_messages_few": "{count} رسائل جديدة من الصيدلية",
+    "unread_messages_many": "{count} رسالة جديدة من الصيدلية",
+    "unread_messages_other": "{count} رسالة جديدة من الصيدلية",
+    "orders_ready_zero": "لا طلبات جاهزة للاستلام",
+    "orders_ready_one": "طلب واحد جاهز للاستلام",
+    "orders_ready_two": "طلبان جاهزان للاستلام",
+    "orders_ready_few": "{count} طلبات جاهزة للاستلام",
+    "orders_ready_many": "{count} طلبًا جاهزًا للاستلام",
+    "orders_ready_other": "{count} طلب جاهز للاستلام",
+    "orders_rejected_zero": "لا طلبات ملغاة",
+    "orders_rejected_one": "أُلغي طلب واحد: رُفضت الوصفة الطبية",
+    "orders_rejected_two": "أُلغي طلبان: رُفضت الوصفة الطبية",
+    "orders_rejected_few": "أُلغيت {count} طلبات: رُفضت الوصفة الطبية",
+    "orders_rejected_many": "أُلغي {count} طلبًا: رُفضت الوصفة الطبية",
+    "orders_rejected_other": "أُلغي {count} طلب: رُفضت الوصفة الطبية",
+    "back_in_stock": "عاد إلى التوفّر: {names}"
   }
 }

@@ -1,6 +1,8 @@
 // Live chat with Socket.IO (FR 5.1, NFR 1.2) and online status (GP2 addition).
 //
-// The browser keeps one Socket.IO connection open while the user is logged in.
+// The browser keeps one Socket.IO connection open while the user is logged in, on every
+// page: the chat uses it for messages and online status, and the notification bell uses it
+// to hear when something changed (GP2 addition). So "online" means "has the app open".
 // Socket.IO reconnects by itself if the connection drops, and notices dead connections.
 //
 // Rooms: every connection joins
@@ -14,11 +16,13 @@
 //   'presence' { scope: 'patient', userId, online }   to staff: a patient came online / went offline
 //   'presence' { scope: 'pharmacy', online }          to patients: the first staff member came online /
 //                                                     the last one went offline
+//   'notify'   (no data)                     "your notifications may have changed" (see notifyRoom)
 // A patient never learns which other patients are online.
 //
-// Event the server RECEIVES:
+// Events the server RECEIVES:
 //   'message'  { sessionId, content }, reply  - send a text message; reply({ ok, message }) or
 //                                               reply({ ok: false, error, code, params })
+//   'presence:refresh'                        - "who is online right now?"; answered with 'ready'
 import { Server } from 'socket.io';
 import { ROLES } from '../constants.js';
 import { getUserFromToken } from '../middleware/auth.js';
@@ -50,6 +54,17 @@ export function publishMessage({ message, session }) {
     return;
   }
   io.to(`user:${session.patient_id}`).to('staff').emit('message', { message, session });
+}
+
+// Tells every connection in `room` that their notifications may have changed, so the bell
+// in the top bar asks the server for its counts again (GP2 addition).
+// `room` is 'staff', 'patients' or 'user:<id>'. The event carries no data on purpose: the
+// counts always come from the database, through GET /api/notifications.
+export function notifyRoom(room) {
+  if (!io) {
+    return;
+  }
+  io.to(room).emit('notify');
 }
 
 // Closes every connection of a user (their account was deleted, or their password was reset).
@@ -110,13 +125,20 @@ export function startChatSocket(httpServer) {
 
     // Tell the new connection who is online right now, so it starts correct.
     // Staff get the list of online patients; patients only learn whether the pharmacy is online.
-    let presence;
-    if (isStaff) {
-      presence = { patients: await getOnlinePatientIds() };
-    } else {
-      presence = { pharmacyOnline: (await countConnectionsInRoom('staff')) > 0 };
+    async function sendReady() {
+      let presence;
+      if (isStaff) {
+        presence = { patients: await getOnlinePatientIds() };
+      } else {
+        presence = { pharmacyOnline: (await countConnectionsInRoom('staff')) > 0 };
+      }
+      socket.emit('ready', { user, presence });
     }
-    socket.emit('ready', { user, presence });
+    await sendReady();
+
+    // The connection now stays open on every page (for the notification bell), so a chat
+    // page that opens later asks "who is online?" and gets the same 'ready' answer again.
+    socket.on('presence:refresh', sendReady);
 
     // 3. The user sends a text message
     socket.on('message', async (data, reply) => {

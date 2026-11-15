@@ -14,10 +14,19 @@ import {
 } from '../validation/saleSchemas.js';
 import { parseId } from '../utils/parseId.js';
 import * as preorderService from '../services/preorderService.js';
+import { markOrdersSeen } from '../services/notificationService.js';
 import { requestForecastSoon } from '../jobs/forecastJob.js';
+import { notifyRoom } from '../socket/chatSocket.js';
 
 const router = express.Router();
 router.use(requireLogin);
+
+// After staff change an order: tell the patient's bell (their order is ready, or was
+// cancelled) and the staff bell (one order fewer is waiting) to refresh.
+function notifyOrderChanged(order) {
+  notifyRoom(`user:${order.patient_id}`);
+  notifyRoom('staff');
+}
 
 // An order is sent as a form, so that a photo of the prescription can come with it.
 // multer reads the form: the text fields end up in req.body and the photo (the
@@ -53,6 +62,7 @@ function receiveOrderForm(req, res, next) {
 router.post('/', requireRole(ROLES.PATIENT), receiveOrderForm, async (req, res) => {
   const input = validateOrder(req.body);
   const preorder = await preorderService.createPreorder(req.user, input, req.file);
+  notifyRoom('staff'); // the staff bell: a new order is waiting
   res.status(201).json({ preorder });
 });
 
@@ -62,9 +72,18 @@ router.get('/mine', requireRole(ROLES.PATIENT), async (req, res) => {
   res.json({ preorders });
 });
 
+// POST /api/preorders/mine/seen - "I am looking at My orders now": the bell stops
+// mentioning orders whose prescription was rejected before this moment
+router.post('/mine/seen', requireRole(ROLES.PATIENT), async (req, res) => {
+  await markOrdersSeen(req.user.id);
+  notifyRoom(`user:${req.user.id}`);
+  res.status(204).end();
+});
+
 // POST /api/preorders/7/cancel - the patient cancels their own pending order
 router.post('/:id/cancel', requireRole(ROLES.PATIENT), async (req, res) => {
   const preorder = await preorderService.cancelOwnPreorder(parseId(req.params.id, 'preorder'), req.user);
+  notifyRoom('staff'); // one order fewer is waiting
   res.json({ preorder });
 });
 
@@ -86,6 +105,7 @@ router.patch('/:id', requireRole(ROLES.STAFF), async (req, res) => {
     requestForecastSoon();
   }
 
+  notifyOrderChanged(preorder);
   res.json({ preorder });
 });
 
@@ -95,6 +115,7 @@ router.post('/:id/prescription', requireRole(ROLES.STAFF), async (req, res) => {
   const id = parseId(req.params.id, 'preorder');
   const input = validate(prescriptionDecisionSchema, req.body);
   const preorder = await preorderService.decidePrescription(id, input);
+  notifyOrderChanged(preorder);
   res.json({ preorder });
 });
 

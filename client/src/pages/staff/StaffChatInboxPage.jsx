@@ -2,6 +2,7 @@
 // conversation next to it. New messages and online dots update live, without refreshing.
 import { useEffect, useState } from 'react';
 import { fetchMessages, fetchSessions, postImage, postMessage, postVoice } from '../../api/chat';
+import { markChatRead } from '../../api/notifications';
 import AssistantChat from '../../components/chat/AssistantChat';
 import ChatTabs from '../../components/chat/ChatTabs';
 import ChatWindow, { PresenceMark } from '../../components/chat/ChatWindow';
@@ -47,6 +48,13 @@ export default function StaffChatInboxPage() {
     }
     let isStillSelected = true; // ignore the answer if another conversation was chosen meanwhile
     setLoadingMessages(true);
+
+    // The conversation is on screen now: its messages no longer count as unread
+    markChatRead(selectedId).catch(() => {});
+    setSessions((current) =>
+      current.map((session) => (session.id === selectedId ? { ...session, unread_count: 0 } : session))
+    );
+
     fetchMessages(selectedId)
       .then((data) => {
         if (isStillSelected) setMessages(data.messages);
@@ -63,12 +71,15 @@ export default function StaffChatInboxPage() {
   }, [selectedId]);
 
   // Moves a conversation to the top of the list with its newest message
-  // (and adds it if it is a new conversation)
-  function updateInbox(message, session) {
+  // (and adds it if it is a new conversation). `isUnread` says whether this message
+  // should add to the conversation's unread count.
+  function updateInbox(message, session, isUnread) {
     setSessions((current) => {
       const existing = current.find((item) => item.id === session.id);
       const others = current.filter((item) => item.id !== session.id);
+      const unreadSoFar = existing ? Number(existing.unread_count) || 0 : 0;
       const updated = {
+        unread_count: isUnread ? unreadSoFar + 1 : unreadSoFar,
         id: session.id,
         patient_id: session.patient_id,
         created_at: existing ? existing.created_at : session.created_at,
@@ -101,9 +112,18 @@ export default function StaffChatInboxPage() {
     } else if (event.type === 'presence' && event.scope === 'patient') {
       setOnlinePatients((current) => ({ ...current, [event.userId]: event.online }));
     } else if (event.type === 'message') {
-      updateInbox(event.message, event.session);
+      const isFromPatient = event.message.sender_id === event.session.patient_id;
+      // The conversation is being looked at when it is the chosen one and the Patients tab is open
+      const isOnScreen = event.message.chat_session_id === selectedId && tab === 'patients';
+
+      // A patient's message in a conversation that is not on screen counts as unread
+      updateInbox(event.message, event.session, isFromPatient && !isOnScreen);
+
       if (event.message.chat_session_id === selectedId) {
         setMessages((current) => addMessageIfNew(current, event.message));
+      }
+      if (isFromPatient && isOnScreen) {
+        markChatRead(selectedId).catch(() => {});
       }
     }
   }
@@ -195,6 +215,12 @@ export default function StaffChatInboxPage() {
                   <span>
                     <strong><bdi>{session.patient_name}</bdi></strong>{' '}
                     <PresenceMark online={isOnline(session.patient_id)} label={presenceLabel(session.patient_id)} />
+                    {/* How many of the patient's messages nobody has opened yet */}
+                    {session.unread_count > 0 && (
+                      <span className="badge badge--danger" title={t('chat.unread', { count: session.unread_count })}>
+                        {session.unread_count}
+                      </span>
+                    )}
                     <br />
                     <span className="muted" style={{ fontSize: '0.85rem' }}>
                       {lastMessagePreview(session)}

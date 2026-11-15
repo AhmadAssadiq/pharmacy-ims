@@ -10,6 +10,7 @@ import cron from 'node-cron';
 import { config } from '../config.js';
 import { runForecast } from '../services/forecastService.js';
 import { fillMissingDemoSales } from '../services/demoSalesService.js';
+import { notifyRoom } from '../socket/chatSocket.js';
 
 const STARTUP_DELAY_MS = 5000;
 const AFTER_SALE_DELAY_MS = 10000;
@@ -38,6 +39,8 @@ export async function runForecastNow(reason) {
       `[forecast:${reason}] trained=${summary.trained} insufficient=${summary.insufficientData} ` +
         `created=${summary.alertsCreated} updated=${summary.alertsUpdated} cleared=${summary.alertsCleared}`
     );
+    // The reorder alerts may have changed: tell the staff notification bell to refresh
+    notifyRoom('staff');
   } catch (error) {
     console.warn(`[forecast:${reason}] skipped - ${error.message}`);
   } finally {

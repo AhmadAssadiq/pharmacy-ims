@@ -8,6 +8,7 @@ import { validate } from '../validation/validate.js';
 import { medicationSchema, newMedicationSchema, batchSchema } from '../validation/medicationSchemas.js';
 import { parseId } from '../utils/parseId.js';
 import * as medicationService from '../services/medicationService.js';
+import { notifyRoom } from '../socket/chatSocket.js';
 
 const router = express.Router();
 router.use(requireLogin, requireRole(ROLES.STAFF));
@@ -83,6 +84,9 @@ router.post('/:id/batches', async (req, res) => {
   const id = parseId(req.params.id, 'medication');
   const input = validate(batchSchema, req.body);
   const batch = await medicationService.addBatch(id, input);
+  // Stock arrived: a patient who asked "tell me when it's back" may now have a
+  // notification, so every patient's bell is told to refresh (see notificationService.js)
+  notifyRoom('patients');
   res.status(201).json({ batch });
 });
 

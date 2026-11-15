@@ -12,9 +12,11 @@ USE pharmacy_ims;
 
 -- Staff and patient accounts. Passwords are stored only as bcrypt hashes.
 -- phone: every patient who registers must give one (GP2 addition), so the pharmacy can
---   call them about a preorder. It is NULL for staff.
--- password_changed_at: when the password was last reset. Login tokens made before this
---   time are refused, so a reset signs out every old session (see middleware/auth.js).
+--   call them about an order. It is NULL for staff.
+-- password_changed_at: when the password was last reset or changed. Login tokens made
+--   before this time are refused, so it signs out every old session (see middleware/auth.js).
+-- orders_seen_at: when a patient last opened their "My orders" page. The notification
+--   bell uses it to show only what happened to their orders since then (GP2 addition).
 CREATE TABLE IF NOT EXISTS users (
   id                  INT UNSIGNED NOT NULL AUTO_INCREMENT,
   name                VARCHAR(100) NOT NULL,
@@ -23,6 +25,7 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash       VARCHAR(255) NOT NULL,
   role                ENUM('staff', 'patient') NOT NULL,
   password_changed_at DATETIME NULL,
+  orders_seen_at      DATETIME NULL,
   PRIMARY KEY (id),
   UNIQUE KEY uq_users_email (email)
 ) ENGINE=InnoDB;
@@ -83,11 +86,16 @@ CREATE TABLE IF NOT EXISTS medication_interactions (
 -- One chat session per patient, enforced by the unique key so two racing
 -- "open my session" requests cannot create a second one. staff_id is set
 -- when a staff member replies.
+-- patient_read_at / staff_read_at: when the patient / the pharmacy staff last had the
+-- conversation open. A message that arrived after that time counts as unread, which is
+-- what the notification bell and the inbox show (GP2 addition).
 CREATE TABLE IF NOT EXISTS chat_sessions (
-  id         INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  patient_id INT UNSIGNED NOT NULL,
-  staff_id   INT UNSIGNED NULL,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  id              INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  patient_id      INT UNSIGNED NOT NULL,
+  staff_id        INT UNSIGNED NULL,
+  created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  patient_read_at DATETIME(3) NULL,
+  staff_read_at   DATETIME(3) NULL,
   PRIMARY KEY (id),
   UNIQUE KEY uq_chat_sessions_patient (patient_id),
   CONSTRAINT fk_chat_sessions_patient FOREIGN KEY (patient_id) REFERENCES users (id) ON DELETE CASCADE,
@@ -187,6 +195,21 @@ CREATE TABLE IF NOT EXISTS password_resets (
   UNIQUE KEY uq_password_resets_token (token_hash),
   KEY idx_password_resets_user (user_id),
   CONSTRAINT fk_password_resets_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- "Tell me when it's back" (GP2 addition): a patient asks to be told when an
+-- out-of-stock medication is in stock again. One row per patient and medication.
+-- When the medication is back, it shows in the patient's notification bell; opening it
+-- there removes the row.
+CREATE TABLE IF NOT EXISTS stock_watches (
+  id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  patient_id    INT UNSIGNED NOT NULL,
+  medication_id INT UNSIGNED NOT NULL,
+  created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_stock_watches_pair (patient_id, medication_id),
+  CONSTRAINT fk_stock_watches_patient    FOREIGN KEY (patient_id)    REFERENCES users (id)       ON DELETE CASCADE,
+  CONSTRAINT fk_stock_watches_medication FOREIGN KEY (medication_id) REFERENCES medications (id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 -- Each user's conversation with Rafiq, the AI assistant (GP2 addition).

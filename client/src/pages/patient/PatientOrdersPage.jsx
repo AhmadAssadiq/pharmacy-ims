@@ -6,6 +6,7 @@
 // The server only ever sends the signed-in patient's own orders.
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { markOrdersSeen } from '../../api/notifications';
 import { cancelMyOrder, fetchMyOrders } from '../../api/preorders';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import { PreorderStatus } from '../../components/StatusMark';
@@ -41,6 +42,9 @@ export default function PatientOrdersPage() {
 
   useEffect(() => {
     loadOrders();
+    // The patient is looking at their orders now: the bell stops mentioning changes
+    // (a rejected prescription) that happened before this moment
+    markOrdersSeen().catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { fetchAvailability } from '../../api/availability';
+import { fetchWatches, unwatchMedication, watchMedication } from '../../api/notifications';
 import AlternativesList from '../../components/AlternativesList';
 import OrderCart from '../../components/order/OrderCart';
 import { useAuth } from '../../context/AuthContext';
@@ -58,6 +59,8 @@ export default function PatientAvailabilityPage() {
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState(null);
   const [orderPlaced, setOrderPlaced] = useState(false);
+  // The ids of the out-of-stock medications this patient asked to be told about
+  const [watchedIds, setWatchedIds] = useState([]);
 
   // Changes the cart and remembers it
   function changeCart(newCart) {
@@ -72,6 +75,10 @@ export default function PatientAvailabilityPage() {
       try {
         const data = await fetchAvailability();
         setMedications(data.medications);
+
+        // The medications this patient asked to be told about ("tell me when it's back")
+        const watches = await fetchWatches();
+        setWatchedIds(watches.medication_ids);
 
         const reorder = location.state?.reorder;
         if (reorder) {
@@ -128,6 +135,24 @@ export default function PatientAvailabilityPage() {
       return;
     }
     changeCart([...cart, toCartLine(medication, 1)]);
+  }
+
+  // "Tell me when it's back" on an out-of-stock medication, or "Stop" to undo it.
+  // When the medication is in stock again, it shows in the notification bell.
+  async function toggleWatch(medication) {
+    setError(null);
+    const isWatched = watchedIds.includes(medication.id);
+    try {
+      if (isWatched) {
+        await unwatchMedication(medication.id);
+        setWatchedIds(watchedIds.filter((id) => id !== medication.id));
+      } else {
+        await watchMedication(medication.id);
+        setWatchedIds([...watchedIds, medication.id]);
+      }
+    } catch (watchError) {
+      setError(te(watchError));
+    }
   }
 
   // The quantity box of a cart line was changed (kept as typed; checked when ordering)
@@ -218,8 +243,16 @@ export default function PatientAvailabilityPage() {
                   <span className="muted" style={{ fontSize: '0.85rem' }}>
                     <bdi>{medication.category}</bdi> · {t('availability.price', { price: formatPrice(medication.unit_price) })}
                   </span>
-                  {/* Out of stock: what is in stock instead */}
+                  {/* Out of stock: what is in stock instead, and "tell me when it's back" */}
                   {!medication.in_stock && <AlternativesList alternatives={medication.alternatives} />}
+                  {!medication.in_stock && (
+                    <span className="alternatives">
+                      {watchedIds.includes(medication.id) && <span className="muted">{t('availability.watching')} </span>}
+                      <button type="button" className="btn btn--sm btn--ghost" onClick={() => toggleWatch(medication)}>
+                        {watchedIds.includes(medication.id) ? t('availability.unwatch') : t('availability.watch')}
+                      </button>
+                    </span>
+                  )}
                 </span>
                 <span className="list__actions">
                   <span className={`badge ${medication.in_stock ? 'badge--success' : 'badge--danger'}`}>

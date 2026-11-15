@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { findAlternatives, addAlternatives } from '../src/utils/alternatives.js';
 import { normaliseIngredient, sortIngredientPair } from '../src/utils/ingredients.js';
 import { findInteractions } from '../src/services/interactionService.js';
+import { buildNotificationItems } from '../src/services/notificationService.js';
 
 // A small catalogue: one medication per situation
 const IBUPROFEN_200 = { id: 1, name: 'Ibuprofen 200mg', category: 'Analgesic', active_ingredient: 'Ibuprofen', quantity: 0 };
@@ -89,4 +90,27 @@ test('every pair in a basket is checked, and the worst problem comes first', () 
   const found = findInteractions([IBUPROFEN, METFORMIN, WARFARIN, ASPIRIN], KNOWN_INTERACTIONS);
   assert.deepEqual(found.map((item) => item.severity), ['major', 'minor']);
   assert.deepEqual(found[0].medication_ids, [1, 2]);
+});
+
+// ---- the notification bell (services/notificationService.js) ----
+
+test('the bell lists only the kinds of notification that have something to show', () => {
+  const links = { reorder_alerts: '/staff/inventory', unread_chats: '/staff/chat', orders_pending: '/staff/preorders' };
+  const items = buildNotificationItems({ reorder_alerts: 3, unread_chats: 0, orders_pending: 1 }, links);
+  assert.deepEqual(items, [
+    { type: 'reorder_alerts', count: 3, link: '/staff/inventory' },
+    { type: 'orders_pending', count: 1, link: '/staff/preorders' },
+  ]);
+  assert.deepEqual(buildNotificationItems({ reorder_alerts: 0, unread_chats: 0, orders_pending: 0 }, links), []);
+});
+
+test('a notification can carry extra details, such as the names of medications back in stock', () => {
+  const items = buildNotificationItems(
+    { back_in_stock: 2 },
+    { back_in_stock: '/patient/availability' },
+    { back_in_stock: { names: ['Ibuprofen 200mg', 'Multivitamin Tablets'] } }
+  );
+  assert.deepEqual(items, [
+    { type: 'back_in_stock', count: 2, link: '/patient/availability', names: ['Ibuprofen 200mg', 'Multivitamin Tablets'] },
+  ]);
 });
