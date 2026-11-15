@@ -6,9 +6,11 @@ for Technology. Prepared by **Abdallah Hasan** and **Ahmad Sadiq**, supervised b
 
 A web application for a community pharmacy that combines inventory management, real-time chat
 between patients and staff, and machine-learning reorder alerts, built to the GP1 software
-documentation. GP2 adds dispensing, preorders, seasonal demand forecasting on Kaggle-based sales
-data, forecast charts, image messages, online status, password reset by email, account deletion,
-dark mode and a full Arabic (right-to-left) interface.
+documentation. GP2 adds dispensing, seasonal demand forecasting on Kaggle-based sales data,
+forecast charts, patient orders with payment and prescriptions, alternatives for out-of-stock
+medications, an interaction check, an AI assistant (Rafiq), image and voice messages, a
+notification bell, online status, password reset by email, account deletion, dark mode and a
+full Arabic (right-to-left) interface. In the interface the product is called **DawaDesk**.
 
 ## Contents
 
@@ -32,7 +34,7 @@ dark mode and a full Arabic (right-to-left) interface.
   /ml-service   Python forecasting service               Flask, scikit-learn, pandas
   /shared       constants used by both client and server (limits, roles, statuses, error codes)
   /data         the demo pharmacy's sales history (demo-sales.json) and the script that built it
-  /docs         testing and verification report
+  /docs         testing and verification report, and the test questions for Rafiq
 ```
 
 ### Server (`server/src`)
@@ -47,14 +49,17 @@ server/src
   config.js       settings read from server/.env
   db.js           the MySQL connection pool and runInTransaction()
   constants.js    the shared constants (from shared/constants.json)
-  routes/         one file per feature: auth, medications, sales, preorders, chat, forecast, availability
+  routes/         one file per feature: auth, medications, sales, preorders (orders), chat, forecast,
+                  availability, interactions, assistant, notifications
   services/       one file per feature: the logic and its SQL
   validation/     zod schemas for every form, with their error messages
   middleware/     auth.js (login token and role checks), errorHandler.js
-  socket/         chatSocket.js - live chat and online status
+  socket/         chatSocket.js - live chat, online status and the "notify" signal for the bell
   jobs/           forecastJob.js (the background forecast), runForecastOnce.js
-  utils/          fefo.js (sell the soonest-expiring lot first), stockFlags.js, dates.js, parseId.js
-  db/             schema.sql, migrate.js, reset.js, seed.js, demoCatalog.js, demoSales.js
+  utils/          fefo.js (sell the soonest-expiring lot first), stockFlags.js, alternatives.js,
+                  ingredients.js, dates.js, parseId.js
+  db/             schema.sql, migrate.js, reset.js, seed.js, demoCatalog.js, demoSales.js,
+                  demoInteractions.js
 ```
 
 ### Client (`client/src`)
@@ -63,11 +68,12 @@ server/src
 client/src
   App.jsx         which address shows which page
   pages/          one file per page (staff/, patient/, and the signed-out pages)
-  components/     shared pieces: layout, dialogs, status badges, chat window, charts,
-                  inventory table, stock lots
+  components/     shared pieces: layout, notification bell, dialogs, status badges, chat window,
+                  charts, inventory table, stock lots, the order cart, the interaction notice
   api/            one file per feature; client.js sets up axios (login token, errors)
-  hooks/          useChatSocket.js - the live chat connection
-  context/        AuthContext (who is signed in), ThemeContext (light / dark / system)
+  hooks/          useChatSocket.js (listen to the live connection), useVoiceRecorder.js
+  context/        AuthContext (who is signed in), ThemeContext (light / dark / system),
+                  SocketContext (the one live connection the bell and the chat share)
   i18n/           en.json, ar.json, setup.js and useI18n.js (texts, dates, prices)
   config/         pharmacy.js - the pharmacy's own details (see the notes below)
   styles.css      all styles, in labelled sections
@@ -142,7 +148,9 @@ its own.
 | `SMTP_SECURE` | `true` on port 465 | TLS from the first byte (465); otherwise STARTTLS (587) |
 | `SMTP_REQUIRE_TLS` | `true` | set `false` only for a local test mail catcher |
 | `AUTH_RESET_DEBUG` | `false` | `true` also prints password reset links in the server output (development only) |
-| `UPLOADS_DIR` | `server/uploads` | where chat images are stored |
+| `UPLOADS_DIR` | `server/uploads` | where chat images, voice messages and prescription photos are stored |
+| `DEEPSEEK_API_KEY` | empty | the key for Rafiq, the AI assistant (see "Rafiq"). Empty: Rafiq answers "unavailable" |
+| `DEEPSEEK_MODEL`, `DEEPSEEK_BASE_URL` | `deepseek-flash`, `https://api.deepseek.com` | which model answers, and where |
 | `NODE_ENV` | `development` | `production` in production |
 
 ### 4. Create the database and the demo data
@@ -154,12 +162,14 @@ npm run db:seed
 
 (In WebStorm: **View -> Tool Windows -> npm**, then double-click `db:migrate`, then `db:seed`.)
 
-`db:migrate` creates the `pharmacy_ims` database with nine tables: `users`, `medications`,
-`medication_batches`, `chat_sessions`, `chat_messages`, `sales_history`, `reorder_alerts`,
-`preorders`, `password_resets`. `db:seed` adds the demo accounts, the demo medications with their
-stock lots, and daily sales history from 1 January 2022 up to yesterday. Stock levels and reorder
-thresholds are worked out from each medication's recent demand, so the demo shows the same
-situations whenever it is seeded (a few reorder alerts, an expired lot, a lot close to expiry,
+`db:migrate` creates the `pharmacy_ims` database with thirteen tables: `users`, `medications`,
+`medication_batches`, `medication_interactions`, `chat_sessions`, `chat_messages`,
+`sales_history`, `reorder_alerts`, `preorders`, `preorder_items`, `password_resets`,
+`stock_watches` and `assistant_messages`. `db:seed` adds the demo accounts, sixteen demo
+medications with their stock lots, daily sales history from 1 January 2022 up to yesterday, and
+the list of known interactions. Stock levels and reorder thresholds are worked out from each
+medication's recent demand, so the demo shows the same situations whenever it is seeded (a few
+reorder alerts, an expired lot, a lot close to expiry, a sold-out medication with alternatives,
 and one medication with too little history to forecast).
 
 | Account | Email | Password | Role |
@@ -192,12 +202,15 @@ Then open <http://localhost:5173>. To stop, press the red Stop button in each ID
 each terminal).
 
 The staff portal has six pages: **Inventory** (stock, warning flags, reorder alerts), **Add
-stock** (receive a lot, or add a new medication), **Dispense** (sell a multi-item basket),
-**Preorders** (patient requests for out-of-stock medication), **Forecast** (demand charts per
-medication) and **Chat inbox**. The patient portal has **Medication availability** (with preorder
-requests), **Chat with pharmacy**, **About**, **Contact** and, behind the patient's name in the
-top bar, **Your account**. Contact and the 404 page also work signed out. Every page has a live
-clock, a language switch (English / العربية) and a theme switch (system / light / dark).
+stock** (receive a lot, or add a new medication), **Dispense** (sell a multi-item basket, with
+the interaction check), **Orders** (patient orders, their payment and prescriptions),
+**Forecast** (demand charts per medication) and **Chat inbox** (with a tab for Rafiq). The
+patient portal has **Medications** (prices, stock, alternatives and the order cart), **My
+orders**, **Chat with pharmacy** (with a tab for Rafiq), **About** and **Contact**. Behind the
+user's name in the top bar is **Your account**, for patients and staff. Contact and the 404
+page also work signed out. Every page has the notification bell, a live clock, a language
+switch (English / العربية) and a theme switch (system / light / dark); on a phone the links
+fold away behind a Menu button.
 
 ### Useful scripts
 
@@ -208,7 +221,7 @@ Run these from WebStorm's **npm** tool window or with `npm run <name>` at the re
 | `dev` | starts the API (4000) and the client (5173) |
 | `db:seed` | refreshes the demo sales history up to yesterday; keeps accounts and today's real sales. Run it before a demo or screenshots |
 | `forecast` | runs the reorder-alert forecast once and prints the result |
-| `test` | runs the server unit tests (61) |
+| `test` | runs the server unit tests (87) |
 | `db:migrate` | creates the database and any missing tables |
 | `db:reset` | **deletes the whole database**, then migrates and seeds it again |
 
@@ -225,9 +238,13 @@ In `ml-service` (PyCharm: right-click the file and run it, or use the terminal):
    `ml-service`, in case new packages were added.
 2. Run `npm run db:migrate`. It is safe to run every time and adds any new tables.
 3. If the pulled changes altered an existing table or the demo data, run `npm run db:reset` once.
-   **It deletes everything in your local database** (accounts, stock, sales, chats, preorders,
+   **It deletes everything in your local database** (accounts, stock, sales, chats, orders,
    alerts) and seeds it again. `db:migrate` alone cannot change a table that already exists.
 4. Restart the ML service and `dev`. The ML service only loads code changes when it starts.
+
+**The orders, Rafiq and notification features changed several tables.** After pulling them, run
+`npm run db:reset` once (step 3), and add `DEEPSEEK_API_KEY=` to your `server/.env` with the
+team's key. The key is never in the repository: get it from your teammate.
 
 ## Features and requirement traceability
 
@@ -240,7 +257,7 @@ In `ml-service` (PyCharm: right-click the file and run it, or use the terminal):
 | UC-1 - update stock | stock lots: `medicationService.addBatch` / `updateBatch`, `client/src/components/inventory/BatchPanel.jsx` |
 | FR 5 / 5.1 / 5.2 - real-time chat, saved messages, unified inbox | `server/src/socket/chatSocket.js`, `services/chatService.js`, `PatientChatPage.jsx`, `StaffChatInboxPage.jsx` |
 | FR 6 / 6.1 / 6.2 - ML forecast and 7-day reorder alerts | `ml-service/forecaster.py`, `server/src/services/forecastService.js`, `server/src/jobs/forecastJob.js`, `ReorderAlertPanel.jsx` |
-| FR 7 - availability without exact quantities | `medicationService.getAvailability`, `PatientAvailabilityPage.jsx` |
+| FR 7 - availability without exact quantities | `medicationService.getAvailability`, `PatientAvailabilityPage.jsx`. Patients now also see prices, because they can order and pay (GP2); quantities and suppliers stay hidden |
 | NFR 2.1 - secure storage | bcrypt password hashes, parameterised SQL everywhere, login tokens required on the API and the chat connection |
 | NFR 2.3 - lock after 5 failed logins | `server/src/services/loginLockout.js` (15-minute lock) |
 | NFR 3.2 - desktop and mobile | responsive CSS in `client/src/styles.css` |
@@ -248,7 +265,16 @@ In `ml-service` (PyCharm: right-click the file and run it, or use the terminal):
 | Dispensing (GP2) - sell a basket, take stock FEFO, feed the forecast | `server/src/services/salesService.js`, `server/src/utils/fefo.js`, `StaffSellPage.jsx` |
 | Forecast charts (GP2) | `forecastService.getMedicationForecast`, `StaffForecastPage.jsx`, `client/src/components/forecast/` |
 | Seasonal forecasting (GP2) - months and seasons, Kaggle-based demo sales | `ml-service/forecaster.py`, `ml-service/evaluate.py`, `data/`, `server/src/db/demoCatalog.js`, `demoSales.js`, `services/demoSalesService.js`, `MonthlyChart.jsx` |
-| Preorders (GP2) | `server/src/services/preorderService.js`, `PatientAvailabilityPage.jsx`, `StaffPreordersPage.jsx` |
+| Orders (GP2) - any medication, several per order, order history | `server/src/services/preorderService.js`, `validation/saleSchemas.js`, `PatientAvailabilityPage.jsx`, `components/order/OrderCart.jsx`, `PatientOrdersPage.jsx`, `StaffPreordersPage.jsx` |
+| Payment, cash or card (GP2, demo only) | `server/src/services/paymentService.js`, `components/order/PaymentDialog.jsx` |
+| Prescription-only medicines (GP2) | `preorderService.createPreorder` / `decidePrescription`, `components/order/PrescriptionImage.jsx`, `StaffPreordersPage.jsx`, the tick box in `StaffSellPage.jsx` |
+| Alternatives for an out-of-stock medication (GP2) | `server/src/utils/alternatives.js`, `components/AlternativesList.jsx` |
+| Interaction check (GP2) | `server/src/services/interactionService.js`, `db/demoInteractions.js`, `components/InteractionNotice.jsx` |
+| Rafiq, the AI assistant (GP2) | `server/src/services/assistantService.js`, `routes/assistant.js`, `components/chat/AssistantChat.jsx`, `docs/rafiq-test-questions.md` |
+| Voice messages (GP2) | `chatService.sendVoiceMessage`, `client/src/hooks/useVoiceRecorder.js`, `ChatWindow.jsx`, `ChatAudio.jsx` |
+| Notification bell, "tell me when it's back" (GP2) | `server/src/services/notificationService.js`, `socket/chatSocket.js` (`notifyRoom`), `context/SocketContext.jsx`, `components/NotificationBell.jsx` |
+| Discontinue instead of delete (GP2) | `medicationService.discontinueMedication` / `deleteMedication`, `StaffInventoryPage.jsx` |
+| Change password, staff account page (GP2) | `authService.changePassword`, `components/ChangePasswordForm.jsx`, `StaffAccountPage.jsx` |
 | Arabic / RTL (GP2) | `client/src/i18n/`, `LanguageToggle.jsx`, logical CSS properties, error codes from `server/src/middleware/errorHandler.js` |
 | Dark mode (GP2) | `client/src/context/ThemeContext.jsx`, `ThemeToggle.jsx`, the dark colours in `styles.css`, the pre-paint script in `client/index.html` |
 | Live clock (GP2) | `client/src/components/Clock.jsx` |
@@ -269,20 +295,23 @@ Limits and thresholds live in `shared/constants.json`:
 | `MAX_LOGIN_ATTEMPTS` / `LOCKOUT_MINUTES` | 5 / 15 | login lockout (NFR 2.3) |
 | `PASSWORD_MIN_LENGTH` | 8 | registration and password reset |
 | `PASSWORD_RESET_MINUTES` | 15 | how long a reset link works |
-| `PREORDER_MAX_QUANTITY` / `PREORDER_NOTE_MAX_LENGTH` | 100 / 500 | preorder limits |
-| `CHAT_MESSAGE_MAX_LENGTH` | 2000 | message and image caption length |
-| `CHAT_IMAGE_MAX_BYTES` / `CHAT_IMAGE_TYPES` | 5 MB / PNG, JPEG, WebP, GIF | image messages |
+| `PREORDER_MAX_QUANTITY` / `PREORDER_NOTE_MAX_LENGTH` | 100 / 500 | units of one medication in an order, and the note's length |
+| `PREORDER_MAX_ITEMS` / `PREORDER_MAX_OPEN` | 10 / 5 | different medications in one order, and open orders per patient |
+| `PAYMENT_METHOD`, `PAYMENT_STATUS`, `PRESCRIPTION_STATUS` | - | the allowed values for an order's payment and prescription |
+| `CHAT_MESSAGE_MAX_LENGTH` | 2000 | message, image caption and Rafiq question length |
+| `CHAT_IMAGE_MAX_BYTES` / `CHAT_IMAGE_TYPES` | 5 MB / PNG, JPEG, WebP, GIF | image messages and prescription photos |
+| `CHAT_VOICE_MAX_BYTES` / `CHAT_VOICE_MAX_SECONDS` | 3 MB / 120 | voice messages |
 | `ERROR_CODES` | - | fixed codes sent with every user-visible error, shown in English or Arabic by the client |
 
 ## How the forecasting works
 
-1. Every sale at the Dispense page (and every collected preorder) writes a row into
+1. Every sale at the Dispense page (and every line of a collected order) writes a row into
    `sales_history`, so the model learns from real demand as the pharmacy is used, on top of the
    seeded history.
 2. The background job (`server/src/jobs/forecastJob.js`) runs every hour, 5 seconds after the
-   server starts, and 10 seconds after a sale or a collected preorder (several sales close
+   server starts, and 10 seconds after a sale or a collected order (several sales close
    together cause one run). It sends each medication's sales history to the ML service
-   (`POST /train`).
+   (`POST /train`). Discontinued medications are left out.
 3. The ML service adds up the sales per day and fits a scikit-learn `LinearRegression` for each
    medication on three kinds of features: a day counter (the trend), the day of the week, and,
    once a medication has a year of history, its position in the year (three sine/cosine pairs),
@@ -308,10 +337,18 @@ The demo pharmacy's sales are based on the Kaggle
 [Global Pharmacy Sales Dataset (2020-2025)](https://www.kaggle.com/datasets/annemark/global-pharmacy-sales-dataset-20202025),
 a synthetic daily dataset of units sold per medicine, region, country and age group.
 
-**The app only uses `data/demo-sales.json`** (in the repository): daily units sold for each of
-the ten demo medicines, by calendar date. The seed copies it into `sales_history`, and the
-forecast trains on `sales_history`. The Kaggle CSV and the preparation script are only needed to
-rebuild that file, for example to change a medicine's pattern.
+**The app only uses `data/demo-sales.json`** (in the repository): daily units sold for fifteen
+demo medicines, by calendar date. The seed copies it into `sales_history`, and the forecast
+trains on `sales_history`. The Kaggle CSV and the preparation script are only needed to rebuild
+that file, for example to change a medicine's pattern.
+
+**Ten of the fifteen series come from the Kaggle file. The other five are derived.** The Kaggle
+file holds only ten medicines, so Paracetamol 1000mg, Ibuprofen 200mg, Loratadine 10mg, Aspirin
+100mg and Warfarin 5mg (added to show alternatives, interactions and prescriptions) each have
+their own volume, growth and seasons, and borrow the day-to-day variation of the closest Kaggle
+medicine (Paracetamol, Ibuprofen, Cetirizine, Amlodipine and Metformin). They are made in step 5
+below, with their own random seed. The sixteenth medication, Vitamin D3, has only a few days of
+made-up sales on purpose, to show the "not enough data" case.
 
 `data/prepare_demo_sales.py` built the file in these steps (it prints each one when it runs):
 
@@ -368,10 +405,13 @@ they need the header `Authorization: Bearer <token>` (the token from login). Err
 | GET | `/auth/me` | any | the signed-in user |
 | DELETE | `/auth/me` | patient | delete your own account `{ password }` |
 | PUT | `/auth/me/phone` | any | add or change your phone number `{ phone }` |
+| PUT | `/auth/me/password` | any | change your password `{ current_password, new_password }`; signs the account out everywhere |
 | POST | `/auth/forgot-password` | public | `{ email, lang? }`: emails a reset link; always the same answer (rate limited) |
 | POST | `/auth/reset-password` | public | `{ token, password }` (rate limited) |
 | GET/POST | `/medications` | staff | list medications / add one with its first stock lot |
-| GET/PUT/DELETE | `/medications/:id` | staff | read / update catalog details / delete |
+| GET/PUT/DELETE | `/medications/:id` | staff | read / update catalog details / delete (refused with 409 when it has sales or orders) |
+| POST | `/medications/:id/discontinue`, `/medications/:id/restore` | staff | stop selling a medication but keep its history / sell it again |
+| POST | `/interactions/check` | any | `{ medication_ids }`: known interactions between those medications |
 | GET/POST | `/medications/:id/batches` | staff | list stock lots / receive a new lot (UC-1) |
 | PATCH/DELETE | `/medications/batches/:batchId` | staff | correct or remove a stock lot (UC-1) |
 | GET/POST | `/sales` | staff | recent sales / sell a basket `{ items: [{ medication_id, quantity }] }` in one transaction |
@@ -384,17 +424,27 @@ they need the header `Authorization: Bearer <token>` (the token from login). Err
 | GET | `/chat/sessions/:id/messages` | participant | message history |
 | POST | `/chat/sessions/:id/messages` | participant | send a text message (also delivered live) |
 | POST | `/chat/sessions/:id/attachments` | participant | send an image: multipart `image` (PNG/JPEG/WebP/GIF, max 5 MB) + optional `caption` |
-| GET | `/chat/attachments/:key` | participant | download an image (access checked every time) |
-| POST | `/preorders` | patient | request an out-of-stock medication `{ medication_id, quantity, note? }` (needs a phone number) |
-| GET | `/preorders/mine` | patient | your own requests |
-| POST | `/preorders/:id/cancel` | patient | cancel your own pending request |
-| GET | `/preorders` | staff | all requests, newest first (`?status=` optional) |
-| PATCH | `/preorders/:id` | staff | `{ status, delivery? }`: pending -> ready / cancelled, ready -> collected / cancelled; with "ready", `delivery` adds the arrived lot to stock |
-| GET | `/availability` | any | in-stock / out-of-stock list |
+| POST | `/chat/sessions/:id/voice` | participant | send a voice message: multipart `voice` (WebM, Ogg or MP4 audio, max 3 MB) |
+| POST | `/chat/sessions/:id/read` | participant | "I have this conversation open": its messages stop counting as unread |
+| GET | `/chat/attachments/:key` | participant | download an image or a voice message (access checked every time) |
+| POST | `/preorders` | patient | place an order: a form with `items` (JSON `[{ medication_id, quantity }]`), `note`, `payment_method` (`cash` or `card`) and, when needed, the file `prescription` (needs a phone number) |
+| GET | `/preorders/mine` | patient | your own orders, open and past |
+| POST | `/preorders/mine/seen` | patient | "I am looking at My orders" (for the bell) |
+| POST | `/preorders/:id/cancel` | patient | cancel your own pending order |
+| GET | `/preorders` | staff | all orders, newest first (`?status=` optional) |
+| PATCH | `/preorders/:id` | staff | `{ status }`: pending -> ready / cancelled, ready -> collected / cancelled. "ready" needs every line in stock and the prescription approved; "collected" sells every line |
+| GET/POST | `/preorders/:id/prescription` | staff (GET: also the order's patient) | the prescription photo / approve or reject it `{ decision, reason? }` |
+| GET | `/availability` | any | the medications a patient can order: price, in stock or not, prescription-only, alternatives |
+| GET/POST/DELETE | `/assistant/messages` | any | my conversation with Rafiq / ask `{ content }` / clear it (20 questions per 10 minutes) |
+| GET | `/notifications` | any | what the bell shows: `{ items, total }` |
+| GET | `/watches` | patient | the medications I asked to be told about |
+| POST/DELETE | `/watches/:medicationId` | patient | tell me when it is back in stock / stop |
+| POST | `/watches/clear-available` | patient | "I have seen which ones are back": stop watching those |
 
-Live chat uses **Socket.IO** on the same port (path `/socket.io`, login token in `auth.token`).
-The server sends `ready`, `message` and `presence` events; the client sends a `message` event
-`{ sessionId, content }` and gets the saved message back in the acknowledgement.
+The live connection uses **Socket.IO** on the same port (path `/socket.io`, login token in
+`auth.token`) and stays open on every signed-in page. The server sends `ready`, `message`,
+`presence` and `notify` events; the client sends a `message` event `{ sessionId, content }` and
+gets the saved message back in the acknowledgement.
 
 ## Notes on the GP2 features
 
@@ -418,7 +468,7 @@ not configured" once and no email goes out. To send real emails with a Gmail acc
    (Google Account -> Security -> App passwords).
 2. In `server/.env` set `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=587`, `SMTP_USER=` the Gmail
    address, `SMTP_PASS=` the 16-character app password, and
-   `MAIL_FROM=Pharmacy IMS <the Gmail address>`.
+   `MAIL_FROM=DawaDesk <the Gmail address>`.
 3. Restart `dev`.
 
 Any other email provider works the same way (port 465 or 587). **For testing without email**,
@@ -427,32 +477,94 @@ the server output (WebStorm's Run window, or the terminal running `npm run dev`)
 
 **Phone numbers.** Every patient gives one when registering (8 to 15 digits; spaces, dashes and
 brackets are ignored, a leading `00` becomes `+`). A patient without one sees a banner asking for
-it and cannot request a preorder until it is added on their account page. Staff see the number as
-a tap-to-call link in the chat inbox and the preorder queue; patients never see each other's.
+it and cannot place an order until it is added on their account page. Staff see the number as
+a tap-to-call link in the chat inbox and the orders queue; patients never see each other's.
 
-**Preorders and stock.** "Mark ready" records the delivery that came in for the request: staff
-enter the lot (quantity, expiry, lot number) and it goes into stock in the same step. If the stock
-was already received on Add stock, staff choose "already in stock" so it is not counted twice.
-Nothing is reserved: until the patient collects, those units can be sold like any others, and
-collecting then reports that there is not enough stock.
+**Orders and stock.** A patient can order any medication, in stock or not, up to ten different
+medications per order and five open orders at a time. The order keeps the prices of the day it
+was placed. Staff receive stock on the Add stock page; "Mark ready" is only allowed when every
+line of the order is on the shelf (otherwise it names the medication that is short) and, if the
+order needs a prescription, once it is approved. Nothing is reserved: until the patient
+collects, those units can be sold like any others, so collecting checks the stock again and
+either sells every line in one transaction or reports which one is short and sells nothing.
+
+**Payment is a demo.** "Cash" is paid at the counter when the order is collected. "Card" shows a
+"Processing payment" step and then "Payment successful", and the order is saved as paid; a
+cancelled paid order shows as refunded. No card number is ever asked for or stored and no real
+payment is taken: `services/paymentService.js` is the one place a real payment provider would
+be called.
+
+**Prescription-only medicines.** A medication can be marked prescription-only (in the demo:
+the antibiotics, Warfarin, Metformin and Amlodipine). An order containing one is refused unless
+a photo of the prescription comes with it. The photo is stored like a chat image and can only
+be opened by staff and by the patient who sent it. Staff approve it, or reject it with a reason:
+a rejection cancels the order and the patient sees the reason. At the counter, selling a
+prescription-only medication asks staff to tick that they checked the prescription.
+
+**Alternatives.** An out-of-stock medication lists up to three medications that are in stock
+instead: first those with the same active ingredient (another strength), then those in the same
+category, which are labelled "similar use: ask the pharmacist first".
+
+**Interaction check.** With two or more medications in a basket or an order, the app looks up
+every pair of active ingredients in the `medication_interactions` table and also warns when the
+same ingredient appears twice. It shows the warnings, or says clearly that there are no known
+interactions. It only warns and never blocks a sale: the pharmacist decides. The table is
+filled from `server/src/db/demoInteractions.js`, a short list of well-known interactions for
+the demo medicines. **It is not a complete clinical reference**; a real pharmacy would load a
+licensed interaction database instead.
+
+**Rafiq.** Rafiq is an AI assistant that patients and staff can ask about medications, in a tab
+of their chat page. Its answers are written by a language model at DeepSeek, an outside company,
+so it needs `DEEPSEEK_API_KEY` in `server/.env`; without it Rafiq answers "unavailable" and
+nothing else is affected. With every question the server sends Rafiq's instructions, the last
+ten messages and the pharmacy's catalogue. Patients' catalogue lines say only "in stock" or "out
+of stock"; staff lines include quantities. No name, phone number or email is ever sent, and a
+notice before the first use says that questions go to an outside service. Rafiq is told to
+refuse to diagnose, to change a prescribed dose, to give children's doses or overdose amounts,
+and to answer anything unrelated to the pharmacy; for an emergency it says to call 911. It can
+only talk: it cannot place orders or change anything. It can still be wrong, so every answer
+sits under a line saying so. [docs/rafiq-test-questions.md](docs/rafiq-test-questions.md) lists
+the questions to ask again before a demo, and what each question costs.
+
+**Notifications.** The bell in the top bar is counted from data the app already has, every time
+it is asked, so there is no notifications table to fall out of step. Staff see reorder alerts,
+conversations with unread messages and orders waiting; patients see new messages from the
+pharmacy, orders ready to collect, orders cancelled over a rejected prescription, and
+medications they asked about ("Tell me when it's back") that are in stock again. The server
+sends a small `notify` signal over the live connection when something changes, and the bell
+then asks for its counts again; it also asks once a minute.
 
 **Online status.** Staff see which patients are online; a patient only sees whether anyone at the
-pharmacy is online. It is kept in memory only (no "last seen"), and a closed laptop shows as
-offline within about a minute.
+pharmacy is online. Because the live connection now stays open on every page (for the bell),
+"online" means "has the app open", not only "is on the chat page". It is kept in memory only (no
+"last seen"), and a closed laptop shows as offline within about a minute.
 
-**Image messages.** The file type is checked from the file's actual bytes, so only real PNG,
-JPEG, WebP and GIF images are accepted (SVG never is). Images are saved under random names in
-`UPLOADS_DIR`, which is never served directly: they are only downloaded through the logged-in
-route, which checks access each time.
+**Image and voice messages.** The file type is checked from the file's actual bytes, so only
+real PNG, JPEG, WebP and GIF images are accepted (SVG never is), and only real recordings (WebM
+from Chrome and Edge, Ogg from Firefox, MP4 audio from Safari). A voice message is recorded by
+holding the microphone button and letting go; it can be played before choosing Send or Discard.
+Files are saved under random names in `UPLOADS_DIR`, which is never served directly: they are
+only downloaded through the logged-in route, which checks access each time. Recording needs the
+browser's microphone permission, which browsers only give on `localhost` or over HTTPS.
+
+**Discontinuing a medication.** A medication that is no longer sold is discontinued, not
+deleted: it disappears from the patient list, the Dispense page and the forecast, but its stock
+lots, sales history and old orders are kept, and it can be restored. Deleting is only possible
+for a medication that was never sold or ordered (one added by mistake).
+
+**Changing a password.** Patients and staff can change their password on their account page,
+after typing the current one. The account is then signed out on every device and signs in again
+with the new password, exactly as after a password reset.
 
 **Account deletion.** Patients only, confirmed with their password (a wrong one counts towards the
-login lockout). Their chat (with every message and image), preorders and reset links are deleted
-with the account; sales records have no link to users, so dispensing history and the forecast are
-not affected. The account's login token and open chat connection stop working immediately.
+login lockout). Their chat (with every message, image and voice message), orders, prescription
+photos, conversation with Rafiq and reset links are deleted with the account; sales records have
+no link to users, so dispensing history and the forecast are not affected. The account's login
+token and open live connection stop working immediately.
 
 **The pharmacy's details.** `client/src/config/pharmacy.js` holds the name, address, map search,
-phone, email, licence number and opening hours used by About and Contact. **Every value there is
-a placeholder** and must be replaced with the real pharmacy's details.
+phone, email, licence number and opening hours used by About and Contact. The name is DawaDesk;
+**every other value there is still a placeholder** and must be replaced with real details.
 
 **Deploying the client.** The app handles its own page addresses, so the web host must serve
 `index.html` for unknown paths (a "single-page app" fallback); otherwise the 404 page, and

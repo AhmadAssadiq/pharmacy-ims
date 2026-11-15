@@ -4,6 +4,11 @@
 > code was later simplified (branch `simplify`): the server tests were rewritten for the new
 > modules (61 tests, `npm test`), and every API response was checked against the original with a
 > 102-request snapshot. File names in the tables below refer to the original layout.
+>
+> **Note (GP2 feedback features):** section 7 records the features added after that (orders,
+> payment, prescriptions, alternatives, interactions, Rafiq, voice messages, notifications and
+> more). The suite is now 87 server tests and 8 forecaster tests. Sections 5 and 6 describe
+> preorders as they were before orders replaced them.
 
 Environment: Windows 10, Node.js 22.16, MySQL 8.4.9, all three services running locally.
 Sections 2-4 were recorded on 2026-09-15 (Python 3.13, scikit-learn 1.6.1); section 5 covers the
@@ -112,3 +117,38 @@ one and deleted it afterwards.
 | Password reset email | against a local mail catcher: one message, sender and Arabic subject correctly encoded, body in Arabic with the link; that link reset the password over HTTP and the new password signed in. Without SMTP settings the server logs "SMTP is not configured" once. Not verified: a real provider (needs your SMTP credentials) |
 | Bug sweep | a socket waiting on its user lookup is no longer killed by the heartbeat; a token the hub refuses (4401) signs the user out instead of reconnecting every 2 s (checked with a deleted account); a stored image missing from disk now gives a plain 404 with no server path in it; the rate limiter prunes expired windows; Inventory's "expiring" KPI and headline now say medications, which is what they count; signed-out pages no longer slide under the language / theme bar on a phone (checked at 375 px) |
 | Regression | 16 pages across staff, patient and signed-out load with no console errors |
+
+## 7. GP2 feedback features - verification (2026-11-14 and 2026-11-15)
+
+Checked on a separate test database (`pharmacy_ims_snapshot`), with the server on port 4100 and
+the site on port 5174, so the working database was never touched. The server rules were
+exercised over HTTP with scripts, and the pages in the browser as staff and as a patient. The
+password test created a temporary account and deleted it afterwards.
+
+Unit tests: `npm test` runs 87 tests in 8 files, all passing; the forecaster's 8 tests pass.
+New test files: `catalogue.test.js` (alternatives, ingredients, interactions, bell items) and
+`assistant.test.js` (Rafiq, with the database and DeepSeek replaced by fakes). New tests were
+added to `validation.test.js` (orders, prescription decisions, medication fields),
+`chatAndReset.test.js` (voice recordings) and `accounts.test.js` (change password).
+
+| Feature | Verified | Not verified |
+|---|---|---|
+| Demo data | `prepare_demo_sales.py` rebuilt `demo-sales.json` with fifteen series of 2,922 days; the ten existing series are identical to before; the seed created 16 medications, 26,675 sales rows and 10 interactions | `evaluate.py` was not run again (the forecaster did not change) |
+| Discontinue | discontinue -> 200; delete with history -> 409 MEDICATION_HAS_HISTORY; selling a discontinued medication -> 400 MEDICATION_DISCONTINUED; restore -> 200 | the Discontinue and Restore buttons were not clicked in the browser (the page builds and its dialog is the shared one) |
+| Alternatives | Ibuprofen 200mg (sold out) lists Ibuprofen 400mg as "same active ingredient", then the two paracetamols as "similar use"; shown on the Dispense page when the sold-out medication is chosen | - |
+| Interaction check | Aspirin + Warfarin -> major; Paracetamol 500mg + 1000mg -> same ingredient; Paracetamol + Cetirizine -> none; a bad list -> 400; the notice appears in the Dispense basket and in the patient's cart | the "prescription checked" tick box on the Dispense dialog was not clicked in the browser |
+| Orders | three-medication order by card with an antibiotic: refused without a photo (400 PRESCRIPTION_REQUIRED), accepted with one (paid, prescription waiting); "ready" before approval -> 409; approved; "ready" with a line out of stock -> 409 PREORDER_STOCK_SHORT naming it; after receiving stock -> ready -> collected, stock down on all three lines; a patient calling staff endpoints -> 403 | two staff members changing the same order at once |
+| Payment (demo) | card: "Processing payment", then "Payment successful", order saved as paid; cash: unpaid until collected; cancelled card order -> refunded | - |
+| Prescriptions | photo stored and opened by staff (200, `image/png`) and shown in the staff dialog; rejecting without a reason -> 400; with one -> order cancelled, refunded, reason shown to the patient | a second patient trying to open another patient's photo (the rule is the same 404 as for orders) |
+| My orders | open and past orders with lines, totals, payment and prescription state; cancel a pending order | "Order again" was not clicked in the browser |
+| Voice messages | a WebM recording sent over HTTP is stored as `audio/webm`, appears in the inbox as "Voice message" and plays in the chat bubble; a PNG sent as a recording -> 415 VOICE_TYPE; the microphone button is shown | **recording with a real microphone** (hold, release, preview, send): the test browser has no microphone |
+| Rafiq | fifteen questions as a patient and as staff, in English and Arabic (see `docs/rafiq-test-questions.md`): stock, prices and alternatives from the catalogue; no quantities for a patient; refusals to diagnose, change a dose, dose a child, give overdose amounts and go off-topic; an emergency answered with 911; the Rafiq tab and its first-use notice for staff | the Rafiq tab was not opened as a patient in the browser; the 20-questions limit was not reached |
+| Notification bell | staff: a new patient message and a new order raised the bell to 2 without a reload; opening the conversation cleared its unread mark and lowered the bell. Patient (over HTTP): unread message, order ready and medication back in stock listed, and each cleared when opened | the patient's bell in the browser; the reorder-alert line (the forecast service was switched off on the test server) |
+| Tell me when it's back | watch a sold-out medication -> after stock is received it is listed in the bell with its name -> opening it removes the watch | the button on the patient page was not clicked in the browser |
+| Phone menu | at 375 px wide the links fold behind "Menu" (top bar 117 px, was 177 px), open as a list, and the bell's list stays inside the screen; no sideways scrolling | Arabic at phone width; a real phone |
+| Change password | wrong current password -> 401 and nothing changed; new = current -> 400; correct -> 204, the old login token -> 401 at once, the old password no longer signs in, the new one does | the form in the browser, and a second open tab being signed out |
+| DawaDesk | the name in the top bar, the tab title and the reset email subject | - |
+
+Still to do by hand before the defence: record a real voice message in Chrome and in Firefox;
+go through the new pages in Arabic and in dark mode; have the wording of the ten interactions
+in `server/src/db/demoInteractions.js` checked against a reference.
