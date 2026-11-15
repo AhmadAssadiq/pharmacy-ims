@@ -380,8 +380,10 @@ a:hover { color: var(--link-hover); }
 
 .topbar__who--link:hover .topbar__role { text-decoration: underline; }
 
-/* The "Menu" button and the account link inside the menu: only shown on a phone (below) */
-.topbar__menu { display: none; }
+/* The "Menu" button and the account link inside the menu: only shown on a phone (below).
+   (Written as .btn.topbar__menu so it wins over the general .btn rule further down,
+   which would otherwise show the button on every screen.) */
+.btn.topbar__menu { display: none; }
 .topbar__link--phone { display: none; }
 
 /* The notification bell (components/NotificationBell.jsx) */
@@ -443,7 +445,7 @@ a:hover { color: var(--link-hover); }
 @media (max-width: 720px) {
   .topbar__who { display: none; }
   .topbar__date { display: none; }
-  .topbar__menu { display: inline-flex; align-items: center; gap: 6px; }
+  .btn.topbar__menu { display: inline-flex; align-items: center; gap: 6px; }
   .topbar__nav { display: none; order: 3; width: 100%; flex-direction: column; }
   .topbar__nav.is-open { display: flex; }
   .topbar__link--phone { display: inline-flex; }
