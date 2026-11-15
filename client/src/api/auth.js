@@ -10,3 +10,6 @@ export const forgotPasswordRequest = (email, lang) =>
 export const resetPasswordRequest = (payload) => request('/auth/reset-password', { method: 'POST', body: payload });
 export const deleteAccountRequest = (password) => request('/auth/me', { method: 'DELETE', body: { password } });
 export const updatePhoneRequest = (phone) => request('/auth/me/phone', { method: 'PUT', body: { phone } });
+/** Changes my own password. Every session of the account is signed out afterwards. */
+export const changePasswordRequest = (currentPassword, newPassword) =>
+  request('/auth/me/password', { method: 'PUT', body: { current_password: currentPassword, new_password: newPassword } });

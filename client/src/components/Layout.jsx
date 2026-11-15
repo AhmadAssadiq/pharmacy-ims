@@ -51,6 +51,7 @@ export default function Layout() {
   const location = useLocation();
   const isStaff = user.role === ROLES.STAFF;
   const links = isStaff ? STAFF_LINKS : PATIENT_LINKS;
+  const accountPath = isStaff ? '/staff/account' : '/patient/account';
   // On a phone: whether the links are showing (the "Menu" button opens and closes them)
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -103,11 +104,9 @@ export default function Layout() {
               </NavLink>
             ))}
             {/* On a phone the user's name is hidden, so the account page is linked here */}
-            {!isStaff && (
-              <NavLink to="/patient/account" className="topbar__link topbar__link--phone">
-                {t('account.linkLabel')}
-              </NavLink>
-            )}
+            <NavLink to={accountPath} className="topbar__link topbar__link--phone">
+              {t('account.linkLabel')}
+            </NavLink>
           </nav>
 
           <div className="topbar__user">
@@ -115,18 +114,12 @@ export default function Layout() {
             <Clock />
             <LanguageToggle />
             <ThemeToggle />
-            {isStaff ? (
-              <span className="topbar__who">
-                <span>{user.name}</span>
-                <span className="topbar__role">{t('nav.roleStaff')}</span>
-              </span>
-            ) : (
-              // A patient's name opens their account page (delete account lives there).
-              <Link to="/patient/account" className="topbar__who topbar__who--link" title={t('account.linkTitle')}>
-                <span><bdi>{user.name}</bdi></span>
-                <span className="topbar__role">{t('account.linkLabel')}</span>
-              </Link>
-            )}
+            {/* The user's name opens their account page (change password; patients can
+                also change their phone number and delete their account there) */}
+            <Link to={accountPath} className="topbar__who topbar__who--link" title={t('account.linkTitle')}>
+              <span><bdi>{user.name}</bdi></span>
+              <span className="topbar__role">{isStaff ? t('nav.roleStaff') : t('account.linkLabel')}</span>
+            </Link>
             <button type="button" className="btn btn--sm" onClick={handleLogout}>
               {t('nav.logout')}
             </button>

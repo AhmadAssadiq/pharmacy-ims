@@ -1,11 +1,13 @@
 // The patient's account page (GP2 addition):
 //   - who they are signed in as,
-//   - their phone number (the pharmacy phones when a preorder is ready),
+//   - their phone number (the pharmacy phones when an order is ready),
+//   - changing their password (components/ChangePasswordForm.jsx),
 //   - deleting the account: they type their password, then confirm in a dialog that says
 //     what will be deleted. Afterwards they are signed out and sent to the login page.
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { deleteAccountRequest, updatePhoneRequest } from '../../api/auth';
+import ChangePasswordForm from '../../components/ChangePasswordForm';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import { useAuth } from '../../context/AuthContext';
 import { useI18n } from '../../i18n/useI18n';
@@ -141,6 +143,9 @@ export default function PatientAccountPage() {
           </button>
         </div>
       </form>
+
+      {/* Change the password (signs out everywhere afterwards) */}
+      <ChangePasswordForm />
 
       {/* Delete the account */}
       <form className="card card--danger" onSubmit={handleDeleteRequest} aria-labelledby="delete-account">

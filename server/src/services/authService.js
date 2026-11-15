@@ -120,6 +120,26 @@ export async function updatePhone(user, input) {
   return toPublicUser(await findUserById(user.id));
 }
 
+// The logged-in user (patient or staff) changes their own password (GP2 addition).
+// `input` is already validated (changePasswordSchema): { current_password, new_password }.
+//
+// Recording the time in password_changed_at is what signs every session out: the login
+// check (middleware/auth.js) refuses any login token made before that time. That includes
+// the token used for this very request, so afterwards the user signs in again with the
+// new password, on every device. A password reset by email works the same way.
+export async function changePassword(user, input) {
+  // 1. The current password must be right (a wrong one counts towards the lockout,
+  //    exactly like a wrong login, so this form cannot be used to guess passwords)
+  const account = await checkPasswordWithLockout(user.email, input.current_password, 'Current password is not correct.');
+
+  // 2. Store the new password (as a bcrypt hash, never as text) and the time it changed
+  const passwordHash = await bcrypt.hash(input.new_password, BCRYPT_ROUNDS);
+  await db.query('UPDATE users SET password_hash = ?, password_changed_at = NOW() WHERE id = ?', [
+    passwordHash,
+    account.id,
+  ]);
+}
+
 // Only patients may delete their own account. Staff accounts are made by the administrator,
 // and a staff member deleting themselves could leave nobody able to run the pharmacy.
 export function canDeleteOwnAccount(role) {

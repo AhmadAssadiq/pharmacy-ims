@@ -8,7 +8,9 @@ import { db } from '../src/db.js';
 import { config } from '../src/config.js';
 import { getMinutesLocked, recordFailedLogin, clearFailedLogins } from '../src/services/loginLockout.js';
 import { createLoginToken, getUserFromToken, requireLogin, requireRole } from '../src/middleware/auth.js';
-import { canDeleteOwnAccount, deleteOwnAccount } from '../src/services/authService.js';
+import bcrypt from 'bcryptjs';
+import { canDeleteOwnAccount, deleteOwnAccount, changePassword } from '../src/services/authService.js';
+import { changePasswordSchema } from '../src/validation/authSchemas.js';
 
 // ---- lockout ----
 
@@ -107,4 +109,54 @@ test('a staff member is refused with 403 before anything is checked or deleted',
     code: 'ACCOUNT_DELETE_FORBIDDEN',
   });
   assert.equal(query.mock.callCount(), 0);
+});
+
+// ---- changing your own password (GP2 addition) ----
+
+test('a new password must be at least 8 characters and different from the current one', () => {
+  const tooShort = changePasswordSchema.safeParse({ current_password: 'OldPass123', new_password: 'short' });
+  assert.equal(tooShort.success, false);
+
+  const same = changePasswordSchema.safeParse({ current_password: 'OldPass123', new_password: 'OldPass123' });
+  assert.equal(same.success, false);
+  assert.equal(same.error.issues[0].message, 'Choose a password that is different from the current one');
+
+  assert.equal(changePasswordSchema.safeParse({ current_password: 'OldPass123', new_password: 'NewPass456' }).success, true);
+});
+
+test('with the right current password, the new hash and the change time are saved', async (t) => {
+  const account = { id: 7, email: 'change@test.com', password_hash: await bcrypt.hash('OldPass123', 4) };
+  const updates = [];
+  t.mock.method(db, 'query', async (sql, params) => {
+    if (sql.startsWith('UPDATE users')) {
+      updates.push({ sql, params });
+      return [{ affectedRows: 1 }];
+    }
+    return [[account]]; // the lookup of the user by email
+  });
+
+  await changePassword({ id: 7, email: 'change@test.com' }, { current_password: 'OldPass123', new_password: 'NewPass456' });
+
+  assert.equal(updates.length, 1);
+  // password_changed_at is what signs every old session out (see the token tests above)
+  assert.match(updates[0].sql, /password_changed_at = NOW\(\)/);
+  const [savedHash, userId] = updates[0].params;
+  assert.equal(userId, 7);
+  assert.equal(await bcrypt.compare('NewPass456', savedHash), true); // stored as a hash, never as text
+  assert.notEqual(savedHash, 'NewPass456');
+});
+
+test('with a wrong current password nothing is changed', async (t) => {
+  const account = { id: 8, email: 'wrong@test.com', password_hash: await bcrypt.hash('OldPass123', 4) };
+  const query = t.mock.method(db, 'query', async () => [[account]]);
+
+  await assert.rejects(
+    changePassword({ id: 8, email: 'wrong@test.com' }, { current_password: 'NotMyPassword', new_password: 'NewPass456' }),
+    { status: 401, code: 'AUTH_INVALID_CREDENTIALS' }
+  );
+  // Only the lookup ran: no UPDATE
+  for (const call of query.mock.calls) {
+    assert.equal(String(call.arguments[0]).startsWith('UPDATE'), false);
+  }
+  clearFailedLogins('wrong@test.com');
 });

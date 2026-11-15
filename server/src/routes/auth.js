@@ -11,6 +11,7 @@ import {
   loginSchema,
   phoneSchema,
   deleteAccountSchema,
+  changePasswordSchema,
   forgotPasswordSchema,
 } from '../validation/authSchemas.js';
 import * as authService from '../services/authService.js';
@@ -107,6 +108,16 @@ router.put('/me/phone', requireLogin, async (req, res) => {
   const input = validate(phoneSchema, req.body);
   const user = await authService.updatePhone(req.user, input);
   res.json({ user });
+});
+
+// PUT /api/auth/me/password - change your own password { current_password, new_password }.
+// Every session of the account is signed out afterwards (see authService.changePassword);
+// closing its live connections makes the open pages notice straight away.
+router.put('/me/password', requireLogin, async (req, res) => {
+  const input = validate(changePasswordSchema, req.body);
+  await authService.changePassword(req.user, input);
+  disconnectUser(req.user.id);
+  res.status(204).end();
 });
 
 // DELETE /api/auth/me - a patient deletes their own account { password }.

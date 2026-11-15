@@ -22,6 +22,7 @@ import StaffSellPage from './pages/staff/StaffSellPage';
 import StaffForecastPage from './pages/staff/StaffForecastPage';
 import StaffChatInboxPage from './pages/staff/StaffChatInboxPage';
 import StaffPreordersPage from './pages/staff/StaffPreordersPage';
+import StaffAccountPage from './pages/staff/StaffAccountPage';
 import PatientAvailabilityPage from './pages/patient/PatientAvailabilityPage';
 import PatientOrdersPage from './pages/patient/PatientOrdersPage';
 import PatientChatPage from './pages/patient/PatientChatPage';
@@ -63,6 +64,7 @@ export default function App() {
                 <Route path="/staff/forecast" element={<StaffForecastPage />} />
                 <Route path="/staff/chat" element={<StaffChatInboxPage />} />
                 <Route path="/staff/preorders" element={<StaffPreordersPage />} />
+                <Route path="/staff/account" element={<StaffAccountPage />} />
               </Route>
             </Route>
 

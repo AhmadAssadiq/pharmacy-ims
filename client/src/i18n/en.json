@@ -447,7 +447,8 @@
     "confirmLead": "Everything listed on this page is erased now, and you are signed out.",
     "confirmButton": "Delete account",
     "keep": "Keep my account",
-    "deleted": "Your account has been deleted."
+    "deleted": "Your account has been deleted.",
+    "role": "Role"
   },
   "notFound": {
     "title": "Page not found",
@@ -696,5 +697,17 @@
     "orders_rejected_one": "{count} order was cancelled: the prescription was rejected",
     "orders_rejected_other": "{count} orders were cancelled: the prescription was rejected",
     "back_in_stock": "Back in stock: {names}"
+  },
+  "password": {
+    "title": "Change password",
+    "intro": "After changing your password you are signed out on every device and sign in again with the new one.",
+    "current": "Current password",
+    "new": "New password (at least {count} characters)",
+    "repeat": "New password again",
+    "submit": "Change password",
+    "tooShort": "The new password must be at least {count} characters.",
+    "mismatch": "The two new passwords are not the same.",
+    "same": "Choose a password that is different from the current one.",
+    "changed": "Password changed. Sign in with your new password."
   }
 }

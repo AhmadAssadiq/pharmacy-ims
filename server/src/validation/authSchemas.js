@@ -85,6 +85,18 @@ export const deleteAccountSchema = z.object({
   password: passwordField,
 });
 
+// Changing your own password while signed in (GP2 addition): the current password, and a
+// new one of at least 8 characters that is different from it
+export const changePasswordSchema = z
+  .object({
+    current_password: passwordField,
+    new_password: newPasswordField,
+  })
+  .refine((input) => input.new_password !== input.current_password, {
+    path: ['new_password'],
+    message: 'Choose a password that is different from the current one',
+  });
+
 // Forgot password: the email, and the language to write the email in ('ar' or else 'en')
 export const forgotPasswordSchema = z.object({
   email: emailField,
