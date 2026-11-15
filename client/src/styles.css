@@ -1301,3 +1301,9 @@ input[aria-invalid='true'], select[aria-invalid='true'] { border-color: var(--ne
 
 /* A voice message inside a chat bubble */
 .chat-audio { display: block; height: 40px; max-width: 100%; }
+
+/* The tabs at the top of a chat page: real people, or Rafiq the AI assistant */
+.chat-tabs { margin-bottom: 12px; }
+
+/* An element with the "hidden" attribute stays hidden even when a rule above gives it a display */
+[hidden] { display: none !important; }

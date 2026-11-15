@@ -189,6 +189,21 @@ CREATE TABLE IF NOT EXISTS password_resets (
   CONSTRAINT fk_password_resets_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
+-- Each user's conversation with Rafiq, the AI assistant (GP2 addition).
+-- One row per message: role 'user' is what the person asked, 'assistant' is Rafiq's
+-- answer. A conversation is private to its user (patient or staff) and is deleted with
+-- the account. See services/assistantService.js.
+CREATE TABLE IF NOT EXISTS assistant_messages (
+  id         INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id    INT UNSIGNED NOT NULL,
+  role       ENUM('user', 'assistant') NOT NULL,
+  content    TEXT NOT NULL,
+  created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (id),
+  KEY idx_assistant_messages_user (user_id, id),
+  CONSTRAINT fk_assistant_messages_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
 -- Historical sales used to train the forecasting model (FR 6.1).
 CREATE TABLE IF NOT EXISTS sales_history (
   id            INT UNSIGNED NOT NULL AUTO_INCREMENT,

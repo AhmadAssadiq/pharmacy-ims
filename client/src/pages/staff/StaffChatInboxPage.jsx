@@ -2,6 +2,8 @@
 // conversation next to it. New messages and online dots update live, without refreshing.
 import { useEffect, useState } from 'react';
 import { fetchMessages, fetchSessions, postImage, postMessage, postVoice } from '../../api/chat';
+import AssistantChat from '../../components/chat/AssistantChat';
+import ChatTabs from '../../components/chat/ChatTabs';
 import ChatWindow, { PresenceMark } from '../../components/chat/ChatWindow';
 import PhoneLink from '../../components/PhoneLink';
 import { useAuth } from '../../context/AuthContext';
@@ -19,6 +21,8 @@ export default function StaffChatInboxPage() {
   const [error, setError] = useState(null);
   // Which patients are online: { patientId: true/false }
   const [onlinePatients, setOnlinePatients] = useState({});
+  // Which tab is open: 'patients' (the inbox) or 'rafiq' (the AI assistant)
+  const [tab, setTab] = useState('patients');
 
   // On load: the list of conversations (each says whether its patient is online)
   useEffect(() => {
@@ -162,7 +166,20 @@ export default function StaffChatInboxPage() {
       </div>
       {error && <div className="alert alert--error" role="alert">{te(error)}</div>}
 
-      <div className="chat-layout">
+      {/* Two tabs: the conversations with patients, or Rafiq the AI assistant */}
+      <ChatTabs
+        tabs={[
+          { key: 'patients', label: t('chat.patients') },
+          { key: 'rafiq', label: t('assistant.name') },
+        ]}
+        current={tab}
+        onChange={setTab}
+      />
+      {tab === 'rafiq' && <AssistantChat />}
+
+      {/* The inbox stays on the page while the Rafiq tab is open (only hidden), so the
+          chosen conversation and the live connection are kept */}
+      <div className="chat-layout" hidden={tab !== 'patients'}>
         <aside className="card" aria-label={t('chat.sessionsLabel')}>
           <h2>{t('chat.patients')}</h2>
           {loadingSessions && <p className="muted">{t('chat.loadingSessions')}</p>}

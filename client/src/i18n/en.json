@@ -539,7 +539,8 @@
     "PRESCRIPTION_NOT_APPROVED": "Check the prescription before marking this order ready.",
     "PRESCRIPTION_NOT_WAITING": "This prescription has already been checked. Refresh the page.",
     "VOICE_TYPE": "Only voice recordings can be sent.",
-    "VOICE_TOO_LARGE": "That voice message is too long. Record a shorter one."
+    "VOICE_TOO_LARGE": "That voice message is too long. Record a shorter one.",
+    "ASSISTANT_UNAVAILABLE": "Rafiq is not available right now. Try again later, or ask the pharmacist."
   },
   "alternatives": {
     "title": "In stock instead:",
@@ -655,5 +656,20 @@
     "success": "Payment successful",
     "paid": "{total} paid by card.",
     "done": "Done"
+  },
+  "assistant": {
+    "name": "Rafiq",
+    "tabPharmacist": "Pharmacist",
+    "subtitle": "AI assistant: general information about medications",
+    "reminder": "Rafiq is an AI and can be wrong. For your own treatment, ask the pharmacist.",
+    "noticeTitle": "Before you ask Rafiq",
+    "noticeAi": "Rafiq is an AI assistant, not a pharmacist or a doctor. It can make mistakes.",
+    "noticeGeneral": "It gives general information about medications and about this pharmacy's stock and prices. It does not diagnose, and it does not change anyone's treatment.",
+    "noticePrivacy": "Your questions are sent to an outside AI service to be answered. Your name, phone number and email are not sent. Do not type personal details into the chat.",
+    "noticeAccept": "I understand",
+    "clear": "Clear conversation",
+    "clearTitle": "Clear your conversation with Rafiq?",
+    "clearLead": "Every question and answer in it is deleted. This cannot be undone.",
+    "reminderStaff": "Rafiq is an AI and can be wrong. Check anything important against a proper reference; the decision stays with you."
   }
 }

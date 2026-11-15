@@ -1,8 +1,11 @@
 // The patient's chat with the pharmacy (FR 5, UC-2).
 // The patient has one conversation; it is opened (or created) when the page loads.
 // New messages arrive live over the chat connection (hooks/useChatSocket.js).
+// A second tab holds the chat with Rafiq, the AI assistant (GP2 addition).
 import { useEffect, useState } from 'react';
 import { fetchMessages, openMySession, postImage, postMessage, postVoice } from '../../api/chat';
+import AssistantChat from '../../components/chat/AssistantChat';
+import ChatTabs from '../../components/chat/ChatTabs';
 import ChatWindow from '../../components/chat/ChatWindow';
 import { useAuth } from '../../context/AuthContext';
 import useChatSocket, { addMessageIfNew } from '../../hooks/useChatSocket';
@@ -17,6 +20,8 @@ export default function PatientChatPage() {
   const [error, setError] = useState(null);
   // Whether anyone at the pharmacy is online: null until the server tells us
   const [pharmacyOnline, setPharmacyOnline] = useState(null);
+  // Which tab is open: 'pharmacist' (the real chat) or 'rafiq' (the AI assistant)
+  const [tab, setTab] = useState('pharmacist');
 
   // On load: open the conversation and load its messages
   useEffect(() => {
@@ -83,19 +88,35 @@ export default function PatientChatPage() {
       <div className="page-header">
         <h1>{t('chat.patientTitle')}</h1>
       </div>
-      <ChatWindow
-        title={t('chat.staffWindowTitle')}
-        subtitle={session && session.staff_id ? t('chat.pharmacistJoined') : t('chat.waitingForPharmacist')}
-        presence={{ online: isKnown && pharmacyOnline, label: presenceLabel }}
-        messages={messages}
-        currentUserId={user.id}
-        onSend={handleSend}
-        onSendImage={handleSendImage}
-        onSendVoice={handleSendVoice}
-        status={status}
-        loading={loading}
-        error={error}
+
+      {/* Two tabs: the real pharmacist, or Rafiq the AI assistant */}
+      <ChatTabs
+        tabs={[
+          { key: 'pharmacist', label: t('assistant.tabPharmacist') },
+          { key: 'rafiq', label: t('assistant.name') },
+        ]}
+        current={tab}
+        onChange={setTab}
       />
+
+      {/* The pharmacist chat stays on the page while the Rafiq tab is open (only hidden),
+          so its messages and live connection are kept */}
+      <div hidden={tab !== 'pharmacist'}>
+        <ChatWindow
+          title={t('chat.staffWindowTitle')}
+          subtitle={session && session.staff_id ? t('chat.pharmacistJoined') : t('chat.waitingForPharmacist')}
+          presence={{ online: isKnown && pharmacyOnline, label: presenceLabel }}
+          messages={messages}
+          currentUserId={user.id}
+          onSend={handleSend}
+          onSendImage={handleSendImage}
+          onSendVoice={handleSendVoice}
+          status={status}
+          loading={loading}
+          error={error}
+        />
+      </div>
+      {tab === 'rafiq' && <AssistantChat />}
     </>
   );
 }
